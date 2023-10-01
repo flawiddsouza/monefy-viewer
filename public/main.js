@@ -1,6 +1,8 @@
 import { createApp } from 'vue'
 import { formatDate, getLocalEpoch } from './helpers.js'
 
+const todayEpoch = new Date() + new Date().getTimezoneOffset()
+
 createApp({
     template: /*html*/ `
         <div>
@@ -56,8 +58,8 @@ createApp({
             accounts: [],
             accountId: '',
             displayType: 'Day',
-            dateFrom: getLocalEpoch(new Date(), 'start'),
-            dateTo: getLocalEpoch(new Date(), 'end'),
+            dateFrom: getLocalEpoch(todayEpoch, 'start'),
+            dateTo: getLocalEpoch(todayEpoch, 'end'),
             balance: 0,
             carryOver: [],
             transfers: [],
@@ -87,8 +89,8 @@ createApp({
         },
         displayType() {
             if (this.displayType === 'Day') {
-                this.dateFrom = getLocalEpoch(new Date(), 'start')
-                this.dateTo = getLocalEpoch(new Date(), 'end')
+                this.dateFrom = getLocalEpoch(todayEpoch, 'start')
+                this.dateTo = getLocalEpoch(todayEpoch, 'end')
             }
             this.generateFilteredTransfersAndTransactions()
         },
