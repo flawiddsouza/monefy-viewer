@@ -25,24 +25,22 @@ createApp({
             <div class="mt-1rem">
                 <details open class="mt-1rem" v-for="transactionHead in transactionHeads">
                     <summary style="font-size: 1.1rem;">{{ transactionHead.name }} ({{ transactionHead.transactions.length }}) | {{ formatAmount(transactionHead.transactions.reduce((acc, prev) => acc + prev.amountCents, 0)) }}</summary>
-                    <div class="mt-0_5rem">
+                    <div class="mt-0_5rem" style="margin-left: 1.2rem;">
                         <template v-if="transactionHead.type === 'carryOver'">
                             <div v-for="carryOver in transactionHead.transactions" class="mt-0_5rem">
                                 <div v-if="accountId === ''">{{ carryOver.accountName }}</div>
-                                <div>{{ formatAmount(carryOver.amountCents) }}</div>
+                                <div>🔃 {{ formatAmount(carryOver.amountCents) }}</div>
                             </div>
                         </template>
                         <template v-if="transactionHead.type === 'transfer'">
                             <div v-for="transfer in transactionHead.transactions" class="mt-0_5rem">
-                                <div>{{ transfer.note }}</div>
-                                <div>{{ formatAmount(transfer.amountCents) }}</div>
+                                <div>🔴 {{ formatAmount(transfer.amountCents) }} {{ transfer.note }}</div>
                             </div>
                         </template>
                         <template v-if="transactionHead.type === 'transaction'">
                             <div v-for="transaction in transactionHead.transactions" class="mt-0_5rem">
                                 <div v-if="accountId === ''">{{ transaction.accountName }}</div>
-                                <div>{{ transaction.note }}</div>
-                                <div>{{ formatAmount(transaction.amountCents) }}</div>
+                                <div><template v-if="transaction.categoryType === 'Income'">🟢</template><template v-else>🔴</template> {{ formatAmount(transaction.amountCents) }} {{ transaction.note }}</div>
                             </div>
                         </template>
                     </div>
@@ -241,6 +239,7 @@ createApp({
                     transactionHeads.push({
                         type: 'transaction',
                         name: transaction.categoryName,
+                        categoryType: transaction.categoryType,
                         transactions: [transaction]
                     })
                 } else {
