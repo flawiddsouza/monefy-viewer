@@ -24,11 +24,11 @@ createApp({
             </div>
             <div class="mt-1rem">
                 <details open>
-                    <summary>Carry Over ({{ carryOver.length }})</summary>
+                    <summary>Carry Over ({{ carryOver.length }}) | {{ formatAmount(carryOver.reduce((acc, prev) => acc + prev.amountCents, 0)) }}</summary>
                     <div>
                         <div v-for="carryOverItem in carryOver">
                             <div v-if="accountId === ''">{{ carryOverItem.accountName }}</div>
-                            <div>{{ carryOverItem.amount }}</div>
+                            <div>{{ formatAmount(carryOverItem.amountCents) }}</div>
                         </div>
                     </div>
                 </details>
@@ -216,9 +216,9 @@ createApp({
                 const account = this.accounts.find(account => account._id === accountId)
                 return {
                     accountName: account.title,
-                    amount: this.formatAmount(carryOver[accountId])
+                    amountCents: carryOver[accountId]
                 }
-            }).filter(item => item.amount !== '0.00')
+            }).filter(item => item.amountCents !== 0)
 
             this.filteredTransactions = transactions
         },
