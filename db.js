@@ -38,6 +38,7 @@ export function getTransactions() {
         JOIN accounts ON transactions.account_id = accounts._id
         JOIN categories ON transactions.category_id = categories._id
         WHERE transactions.deletedOn IS NULL
+        AND accounts.deletedOn IS NULL
     `).all()
 
     return transactions

@@ -27,7 +27,8 @@ createApp({
                     <summary>Carry Over ({{ carryOver.length }})</summary>
                     <div>
                         <div v-for="carryOverItem in carryOver">
-                            {{ carryOverItem }}
+                            <div v-if="accountId === ''">{{ carryOverItem.accountName }}</div>
+                            <div>{{ carryOverItem.amount }}</div>
                         </div>
                     </div>
                 </details>
@@ -65,6 +66,8 @@ createApp({
             carryOver: [],
             transfers: [],
             transactions: [],
+            filteredTransfers: [],
+            filteredTransactions: [],
         }
     },
     computed: {
@@ -78,46 +81,18 @@ createApp({
             } else if (this.displayType === 'Week' || this.displayType === 'All' || this.displayType === 'Interval (Give Date Range)') {
                 return `${this.dateFrom} - ${this.dateTo}`
             }
-        },
-        filteredTransfers() {
-            let transfers = []
-
-            if(this.accountId === '') {
-                transfers = this.transfers
-            } else {
-                transfers = this.transfers.filter(transfer => transfer.accountFromId === this.accountId || transfer.accountToId === this.accountId)
-            }
-
-            if(this.displayType !== 'All') {
-                transfers = transfers.filter(transfer => transfer.createdOn >= this.dateFrom && transfer.createdOn <= this.dateTo)
-            }
-
-            return transfers
-        },
-        filteredTransactions() {
-            let transactions = []
-
-            if(this.accountId === '') {
-                transactions = this.transactions
-            } else {
-                transactions = this.transactions.filter(transaction => transaction.accountId === this.accountId)
-            }
-
-            if(this.displayType !== 'All') {
-                transactions = transactions.filter(transaction => transaction.createdOn >= this.dateFrom && transaction.createdOn <= this.dateTo)
-            }
-
-            return transactions
         }
     },
     watch: {
         accountId() {
+            this.generateFilteredTransfersAndTransactions()
         },
         displayType() {
             if (this.displayType === 'Day') {
                 this.dateFrom = getLocalEpoch(new Date(), 'start')
                 this.dateTo = getLocalEpoch(new Date(), 'end')
             }
+            this.generateFilteredTransfersAndTransactions()
         },
     },
     methods: {
@@ -148,6 +123,7 @@ createApp({
                 // this.dateFrom = getLocalEpoch(this.dateFrom, -365)
                 // this.dateTo = getLocalEpoch(this.dateTo, -365)
             }
+            this.generateFilteredTransfersAndTransactions()
         },
         next() {
             if (this.displayType === 'Day') {
@@ -164,16 +140,93 @@ createApp({
                 // this.dateFrom = getLocalEpoch(this.dateFrom, 365)
                 // this.dateTo = getLocalEpoch(this.dateTo, 365)
             }
+            this.generateFilteredTransfersAndTransactions()
         },
         formatAmount(amountCents) {
             const amount = amountCents / 1000
             const formattedAmount = amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
             return formattedAmount
-        }
+        },
+        generateFilteredTransfersAndTransactions() {
+            let carryOver = {}
+
+            let transfers = []
+
+            if (this.accountId === '') {
+                transfers = this.transfers
+            } else {
+                transfers = this.transfers.filter(transfer => transfer.accountFromId === this.accountId || transfer.accountToId === this.accountId)
+            }
+
+            transfers.filter(transfer => transfer.createdOn < this.dateFrom).forEach(transfer => {
+                const accountFrom = this.accounts.find(account => account._id === transfer.accountFromId)
+                if (accountFrom.isIncludedInTotalBalance === 1) {
+                    if (carryOver[transfer.accountFromId] === undefined) {
+                        carryOver[transfer.accountFromId] = 0
+                    }
+                    carryOver[transfer.accountFromId] -= transfer.amountCents
+                }
+
+                const accountTo = this.accounts.find(account => account._id === transfer.accountToId)
+                if (accountTo.isIncludedInTotalBalance === 1) {
+                    if (carryOver[transfer.accountToId] === undefined) {
+                        carryOver[transfer.accountToId] = 0
+                    }
+                    carryOver[transfer.accountToId] += transfer.amountCents
+                }
+            })
+
+            if (this.displayType !== 'All') {
+                transfers = transfers.filter(transfer => transfer.createdOn >= this.dateFrom && transfer.createdOn <= this.dateTo)
+            }
+
+            this.filteredTransfers = transfers
+
+            let transactions = []
+
+            if (this.accountId === '') {
+                transactions = this.transactions
+            } else {
+                transactions = this.transactions.filter(transaction => transaction.accountId === this.accountId)
+            }
+
+            transactions.filter(transaction => transaction.createdOn < this.dateFrom).forEach(transaction => {
+                if (transaction.isIncludedInTotalBalance === 0) {
+                    return
+                }
+
+                if (carryOver[transaction.accountId] === undefined) {
+                    carryOver[transaction.accountId] = 0
+                }
+
+                if (transaction.categoryType === 'Income') {
+                    carryOver[transaction.accountId] += transaction.amountCents
+                }
+
+                if (transaction.categoryType === 'Expense') {
+                    carryOver[transaction.accountId] -= transaction.amountCents
+                }
+            })
+
+            if(this.displayType !== 'All') {
+                transactions = transactions.filter(transaction => transaction.createdOn >= this.dateFrom && transaction.createdOn <= this.dateTo)
+            }
+
+            this.carryOver = Object.keys(carryOver).map(accountId => {
+                const account = this.accounts.find(account => account._id === accountId)
+                return {
+                    accountName: account.title,
+                    amount: this.formatAmount(carryOver[accountId])
+                }
+            }).filter(item => item.amount !== '0.00')
+
+            this.filteredTransactions = transactions
+        },
     },
-    created() {
-        this.fetchAccounts()
-        this.fetchTransactions()
-        this.fetchTransfers()
+    async created() {
+        await this.fetchAccounts()
+        await this.fetchTransactions()
+        await this.fetchTransfers()
+        this.generateFilteredTransfersAndTransactions()
     }
 }).mount('#app')
