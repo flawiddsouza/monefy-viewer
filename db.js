@@ -39,6 +39,7 @@ export function getTransactions() {
         JOIN categories ON transactions.category_id = categories._id
         WHERE transactions.deletedOn IS NULL
         AND accounts.deletedOn IS NULL
+        ORDER BY transactions.createdOn DESC
     `).all()
 
     return transactions
@@ -58,6 +59,7 @@ export function getTransfers() {
         JOIN accounts AS accountsFrom ON transfers.accountFrom = accountsFrom._id
         JOIN accounts AS accountsTo ON transfers.accountTo = accountsTo._id
         WHERE transfers.deletedOn IS NULL
+        ORDER BY transfers.createdOn DESC
     `).all()
     return transfers
 }

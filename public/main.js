@@ -23,33 +23,28 @@ createApp({
                 <button @click="previous">Previous</button> <span>{{ label }}</span> <button @click="next">Next</button>
             </div>
             <div class="mt-1rem">
-                <details open>
-                    <summary style="font-size: 1.1rem;">Carry Over ({{ carryOver.length }}) | {{ formatAmount(carryOver.reduce((acc, prev) => acc + prev.amountCents, 0)) }}</summary>
+                <details open class="mt-1rem" v-for="transactionHead in transactionHeads">
+                    <summary style="font-size: 1.1rem;">{{ transactionHead.name }} ({{ transactionHead.transactions.length }}) | {{ formatAmount(transactionHead.transactions.reduce((acc, prev) => acc + prev.amountCents, 0)) }}</summary>
                     <div class="mt-0_5rem">
-                        <div v-for="carryOverItem in carryOver" class="mt-0_5rem">
-                            <div v-if="accountId === ''">{{ carryOverItem.accountName }}</div>
-                            <div>{{ formatAmount(carryOverItem.amountCents) }}</div>
-                        </div>
-                    </div>
-                </details>
-                <details open class="mt-1rem">
-                    <summary style="font-size: 1.1rem;">Transfers ({{ filteredTransfers.length }})</summary>
-                    <div class="mt-0_5rem">
-                        <div v-for="transfer in filteredTransfers" class="mt-0_5rem">
-                            <div>{{ transfer.accountFromName }} -> {{ transfer.accountToName }}</div>
-                            <div>{{ transfer.note }}</div>
-                            <div>{{ formatAmount(transfer.amountCents) }}</div>
-                        </div>
-                    </div>
-                </details>
-                <details open class="mt-1rem">
-                    <summary style="font-size: 1.1rem;">Transactions ({{ filteredTransactions.length }})</summary>
-                    <div class="mt-0_5rem">
-                        <div v-for="transaction in filteredTransactions" class="mt-0_5rem">
-                            <div>{{ transaction.categoryName }}<span v-if="accountId === ''"> ({{ transaction.accountName }})</span></div>
-                            <div>{{ transaction.note }}</div>
-                            <div>{{ formatAmount(transaction.amountCents) }}</div>
-                        </div>
+                        <template v-if="transactionHead.type === 'carryOver'">
+                            <div v-for="carryOver in transactionHead.transactions" class="mt-0_5rem">
+                                <div v-if="accountId === ''">{{ carryOver.accountName }}</div>
+                                <div>{{ formatAmount(carryOver.amountCents) }}</div>
+                            </div>
+                        </template>
+                        <template v-if="transactionHead.type === 'transfer'">
+                            <div v-for="transfer in transactionHead.transactions" class="mt-0_5rem">
+                                <div>{{ transfer.note }}</div>
+                                <div>{{ formatAmount(transfer.amountCents) }}</div>
+                            </div>
+                        </template>
+                        <template v-if="transactionHead.type === 'transaction'">
+                            <div v-for="transaction in transactionHead.transactions" class="mt-0_5rem">
+                                <div v-if="accountId === ''">{{ transaction.accountName }}</div>
+                                <div>{{ transaction.note }}</div>
+                                <div>{{ formatAmount(transaction.amountCents) }}</div>
+                            </div>
+                        </template>
                     </div>
                 </details>
             </div>
@@ -68,6 +63,7 @@ createApp({
             transactions: [],
             filteredTransfers: [],
             filteredTransactions: [],
+            transactionHeads: [],
         }
     },
     computed: {
@@ -185,16 +181,12 @@ createApp({
             let transactions = []
 
             if (this.accountId === '') {
-                transactions = this.transactions
+                transactions = this.transactions.filter(transaction => transaction.isIncludedInTotalBalance === 1)
             } else {
                 transactions = this.transactions.filter(transaction => transaction.accountId === this.accountId)
             }
 
             transactions.filter(transaction => transaction.createdOn < this.dateFrom).forEach(transaction => {
-                if (transaction.isIncludedInTotalBalance === 0) {
-                    return
-                }
-
                 if (carryOver[transaction.accountId] === undefined) {
                     carryOver[transaction.accountId] = 0
                 }
@@ -221,6 +213,42 @@ createApp({
             }).filter(item => item.amountCents !== 0)
 
             this.filteredTransactions = transactions
+
+            const transactionHeads = []
+
+            transactionHeads.push({
+                type: 'carryOver',
+                name: 'Carry Over',
+                transactions: this.carryOver
+            })
+
+            this.filteredTransfers.forEach(transfer => {
+                const transactionHead = transactionHeads.find(transactionHead => transactionHead.name === `${transfer.accountFromName} -> ${transfer.accountToName}` && transactionHead.type === 'transfer')
+                if (transactionHead === undefined) {
+                    transactionHeads.push({
+                        type: 'transfer',
+                        name: `${transfer.accountFromName} -> ${transfer.accountToName}`,
+                        transactions: [transfer]
+                    })
+                } else {
+                    transactionHead.transactions.push(transfer)
+                }
+            })
+
+            this.filteredTransactions.forEach(transaction => {
+                const transactionHead = transactionHeads.find(transactionHead => transactionHead.name === transaction.categoryName && transactionHead.type === 'transaction')
+                if (transactionHead === undefined) {
+                    transactionHeads.push({
+                        type: 'transaction',
+                        name: transaction.categoryName,
+                        transactions: [transaction]
+                    })
+                } else {
+                    transactionHead.transactions.push(transaction)
+                }
+            })
+
+            this.transactionHeads = transactionHeads
         },
     },
     async created() {
