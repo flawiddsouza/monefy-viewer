@@ -22,6 +22,9 @@ createApp({
             <div class="mt-1rem">
                 <button @click="previous">Previous</button> <span>{{ label }}</span> <button @click="next">Next</button>
             </div>
+            <div class="mt-1rem" style="font-size: 1.1rem;">
+                Balance: {{ formatAmount(accountBalance) }}
+            </div>
             <div class="mt-1rem">
                 <details open class="mt-1rem" v-for="transactionHead in transactionHeads">
                     <summary style="font-size: 1.1rem;">{{ transactionHead.name }} ({{ transactionHead.transactions.length }}) | {{ formatAmount(transactionHead.transactions.reduce((acc, prev) => acc + prev.amountCents, 0)) }}</summary>
@@ -62,6 +65,7 @@ createApp({
             filteredTransfers: [],
             filteredTransactions: [],
             transactionHeads: [],
+            accountBalance: 0,
         }
     },
     computed: {
@@ -205,6 +209,7 @@ createApp({
             this.carryOver = Object.keys(carryOver).map(accountId => {
                 const account = this.accounts.find(account => account._id === accountId)
                 return {
+                    accountId,
                     accountName: account.title,
                     amountCents: carryOver[accountId]
                 }
@@ -268,7 +273,21 @@ createApp({
                 }
             })
 
+            let accountBalance = 0
+
+            transactionHeads.forEach(transactionHead => {
+                transactionHead.transactions.forEach(transaction => {
+                    if(transaction.categoryType === 'Expense' || transactionHead.type === 'transfer') {
+                        accountBalance -= transaction.amountCents
+                    } else {
+                        accountBalance += transaction.amountCents
+                    }
+                })
+            })
+
             this.transactionHeads = transactionHeads
+
+            this.accountBalance = accountBalance
         },
     },
     async created() {
