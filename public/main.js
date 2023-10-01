@@ -233,8 +233,29 @@ createApp({
                 }
             })
 
+            // we want income to come first in the view, hence we run the loop twice
             this.filteredTransactions.forEach(transaction => {
-                const transactionHead = transactionHeads.find(transactionHead => transactionHead.name === transaction.categoryName && transactionHead.type === 'transaction')
+                if(transaction.categoryType !== 'Income') {
+                    return
+                }
+                const transactionHead = transactionHeads.find(transactionHead => transactionHead.name === transaction.categoryName && transactionHead.type === 'transaction' && transactionHead.categoryType === transaction.categoryType)
+                if (transactionHead === undefined) {
+                    transactionHeads.push({
+                        type: 'transaction',
+                        name: transaction.categoryName,
+                        categoryType: transaction.categoryType,
+                        transactions: [transaction]
+                    })
+                } else {
+                    transactionHead.transactions.push(transaction)
+                }
+            })
+
+            this.filteredTransactions.forEach(transaction => {
+                if(transaction.categoryType !== 'Expense') {
+                    return
+                }
+                const transactionHead = transactionHeads.find(transactionHead => transactionHead.name === transaction.categoryName && transactionHead.type === 'transaction' && transactionHead.categoryType === transaction.categoryType)
                 if (transactionHead === undefined) {
                     transactionHeads.push({
                         type: 'transaction',
