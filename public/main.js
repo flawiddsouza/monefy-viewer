@@ -24,28 +24,28 @@ createApp({
             </div>
             <div class="mt-1rem">
                 <details open>
-                    <summary>Carry Over ({{ carryOver.length }}) | {{ formatAmount(carryOver.reduce((acc, prev) => acc + prev.amountCents, 0)) }}</summary>
-                    <div>
-                        <div v-for="carryOverItem in carryOver">
+                    <summary style="font-size: 1.1rem;">Carry Over ({{ carryOver.length }}) | {{ formatAmount(carryOver.reduce((acc, prev) => acc + prev.amountCents, 0)) }}</summary>
+                    <div class="mt-0_5rem">
+                        <div v-for="carryOverItem in carryOver" class="mt-0_5rem">
                             <div v-if="accountId === ''">{{ carryOverItem.accountName }}</div>
                             <div>{{ formatAmount(carryOverItem.amountCents) }}</div>
                         </div>
                     </div>
                 </details>
-                <details open>
-                    <summary>Transfers ({{ filteredTransfers.length }})</summary>
-                    <div>
-                        <div v-for="transfer in filteredTransfers">
+                <details open class="mt-1rem">
+                    <summary style="font-size: 1.1rem;">Transfers ({{ filteredTransfers.length }})</summary>
+                    <div class="mt-0_5rem">
+                        <div v-for="transfer in filteredTransfers" class="mt-0_5rem">
                             <div>{{ transfer.accountFromName }} -> {{ transfer.accountToName }}</div>
                             <div>{{ transfer.note }}</div>
                             <div>{{ formatAmount(transfer.amountCents) }}</div>
                         </div>
                     </div>
                 </details>
-                <details open>
-                    <summary>Transactions ({{ filteredTransactions.length }})</summary>
-                    <div>
-                        <div v-for="transaction in filteredTransactions">
+                <details open class="mt-1rem">
+                    <summary style="font-size: 1.1rem;">Transactions ({{ filteredTransactions.length }})</summary>
+                    <div class="mt-0_5rem">
+                        <div v-for="transaction in filteredTransactions" class="mt-0_5rem">
                             <div>{{ transaction.categoryName }}<span v-if="accountId === ''"> ({{ transaction.accountName }})</span></div>
                             <div>{{ transaction.note }}</div>
                             <div>{{ formatAmount(transaction.amountCents) }}</div>

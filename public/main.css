@@ -6,10 +6,18 @@ html, body {
     height: 100%;
 }
 
+#app {
+    padding-bottom: 1rem;
+}
+
 .ml-1rem {
     margin-left: 1rem;
 }
 
 .mt-1rem {
     margin-top: 1rem;
+}
+
+.mt-0_5rem {
+    margin-top: 0.5rem;
 }
