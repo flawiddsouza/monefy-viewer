@@ -1,14 +1,12 @@
 export function getLocalEpoch(localDate, type = 'start') {
-    const date = new Date(localDate)
-    const startEpochMilliseconds = date.setHours(0, 0, 0, 0)
-    const endEpochMilliseconds = startEpochMilliseconds + (24 * 60 * 60 * 1000) - 1
+    const date = dayjs(localDate)
 
     if (type === 'start') {
-       return startEpochMilliseconds
+        return date.startOf('day').valueOf()
     } else if (type === 'end') {
-       return endEpochMilliseconds;
+        return date.endOf('day').valueOf()
     }
- }
+}
 
 export function formatDate(date) {
     return dayjs(date).format('dddd, D MMMM')
