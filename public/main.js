@@ -46,11 +46,13 @@ createApp({
                         </template>
                         <template v-if="transactionHead.type === 'transfer'">
                             <div v-for="transfer in transactionHead.transactions" class="mt-0_5rem">
+                                <div v-if="displayType !== 'Date' && displayType !== 'Choose Date'">{{ formatDate(transfer.createdOn) }}</div>
                                 <div>🔴 {{ formatAmount(transfer.amountCents) }} {{ transfer.note }}</div>
                             </div>
                         </template>
                         <template v-if="transactionHead.type === 'transaction'">
                             <div v-for="transaction in transactionHead.transactions" class="mt-0_5rem">
+                                <div v-if="displayType !== 'Date' && displayType !== 'Choose Date'">{{ formatDate(transaction.createdOn) }}</div>
                                 <div v-if="accountId === ''">{{ transaction.accountName }}</div>
                                 <div><template v-if="transaction.categoryType === 'Income'">🟢</template><template v-else>🔴</template> {{ formatAmount(transaction.amountCents) }} {{ transaction.note }}</div>
                             </div>
@@ -346,6 +348,7 @@ createApp({
 
             this.accountBalance = accountBalance
         },
+        formatDate,
     },
     async created() {
         await Promise.all([
