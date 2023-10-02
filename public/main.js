@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
-import { formatDate, getLocalEpoch } from './helpers.js'
+import { formatDate, formatDateRange, getLocalEpoch } from './helpers.js'
 
-const todayEpoch = new Date() + new Date().getTimezoneOffset()
+const todayEpoch = new Date()
 
 createApp({
     template: /*html*/ `
@@ -20,6 +20,13 @@ createApp({
                     <option>Interval (Give Date Range)</option>
                     <option>Choose Date</option>
                 </select>
+                <template v-if="displayType === 'Interval (Give Date Range)'">
+                    <input class="ml-1rem" type="date" v-model="dateFrom">
+                    <input class="ml-1rem" type="date" v-model="dateTo">
+                </template>
+                <template v-if="displayType === 'Choose Date'">
+                    <input class="ml-1rem" type="date" v-model="dateFrom">
+                </template>
             </div>
             <div class="mt-1rem">
                 <button @click="previous">Previous</button> <span>{{ label }}</span> <button @click="next">Next</button>
@@ -74,12 +81,8 @@ createApp({
         label() {
             if (this.displayType === 'Day' || this.displayType === 'Choose Date') {
                 return formatDate(this.dateFrom)
-            } else if (this.displayType === 'Month') {
-                return getMonth(this.dateFrom)
-            } else if (this.displayType === 'Year') {
-                return getYear(this.dateFrom)
-            } else if (this.displayType === 'Week' || this.displayType === 'All' || this.displayType === 'Interval (Give Date Range)') {
-                return `${this.dateFrom} - ${this.dateTo}`
+            } else {
+                return formatDateRange(this.dateFrom, this.dateTo)
             }
         }
     },
@@ -91,6 +94,21 @@ createApp({
             if (this.displayType === 'Day') {
                 this.dateFrom = getLocalEpoch(todayEpoch, 'start')
                 this.dateTo = getLocalEpoch(todayEpoch, 'end')
+            } else if (this.displayType === 'Week') {
+                const startOfWeek = dayjs().startOf('week').add(1, 'day')
+                const endOfWeek = dayjs().endOf('week').add(1, 'day')
+                this.dateFrom = getLocalEpoch(startOfWeek, 'start')
+                this.dateTo = getLocalEpoch(endOfWeek, 'end')
+            } else if (this.displayType === 'Month') {
+                const startOfMonth = dayjs().startOf('month')
+                const endOfMonth = dayjs().endOf('month')
+                this.dateFrom = getLocalEpoch(startOfMonth, 'start')
+                this.dateTo = getLocalEpoch(endOfMonth, 'end')
+            } else if (this.displayType === 'Year') {
+                const startOfYear = dayjs().startOf('year')
+                const endOfYear = dayjs().endOf('year')
+                this.dateFrom = getLocalEpoch(startOfYear, 'start')
+                this.dateTo = getLocalEpoch(endOfYear, 'end')
             }
             this.generateFilteredTransfersAndTransactions()
         },
@@ -110,35 +128,47 @@ createApp({
         },
         previous() {
             if (this.displayType === 'Day') {
-                const date = dayjs(this.dateFrom).subtract(0, 'day')
+                const date = dayjs(this.dateFrom).subtract(1, 'day')
                 this.dateFrom = getLocalEpoch(date, 'start')
                 this.dateTo = getLocalEpoch(date, 'end')
             } else if (this.displayType === 'Week') {
-                // this.dateFrom = getLocalEpoch(this.dateFrom, -7)
-                // this.dateTo = getLocalEpoch(this.dateTo, -7)
+                const startOfWeek = dayjs(this.dateFrom).subtract(1, 'week')
+                const endOfWeek = dayjs(this.dateTo).subtract(1, 'week')
+                this.dateFrom = getLocalEpoch(startOfWeek, 'start')
+                this.dateTo = getLocalEpoch(endOfWeek, 'end')
             } else if (this.displayType === 'Month') {
-                // this.dateFrom = getLocalEpoch(this.dateFrom, -30)
-                // this.dateTo = getLocalEpoch(this.dateTo, -30)
+                const startOfMonth = dayjs(this.dateFrom).subtract(1, 'month')
+                const endOfMonth = dayjs(this.dateTo).subtract(1, 'month')
+                this.dateFrom = getLocalEpoch(startOfMonth, 'start')
+                this.dateTo = getLocalEpoch(endOfMonth, 'end')
             } else if (this.displayType === 'Year') {
-                // this.dateFrom = getLocalEpoch(this.dateFrom, -365)
-                // this.dateTo = getLocalEpoch(this.dateTo, -365)
+                const startOfYear = dayjs(this.dateFrom).subtract(1, 'year')
+                const endOfYear = dayjs(this.dateTo).subtract(1, 'year')
+                this.dateFrom = getLocalEpoch(startOfYear, 'start')
+                this.dateTo = getLocalEpoch(endOfYear, 'end')
             }
             this.generateFilteredTransfersAndTransactions()
         },
         next() {
             if (this.displayType === 'Day') {
-                const date = dayjs(this.dateFrom).add(2, 'day')
+                const date = dayjs(this.dateFrom).add(1, 'day')
                 this.dateFrom = getLocalEpoch(date, 'start')
                 this.dateTo = getLocalEpoch(date, 'end')
             } else if (this.displayType === 'Week') {
-                // this.dateFrom = getLocalEpoch(this.dateFrom, 7)
-                // this.dateTo = getLocalEpoch(this.dateTo, 7)
+                const startOfWeek = dayjs(this.dateFrom).add(1, 'week')
+                const endOfWeek = dayjs(this.dateTo).add(1, 'week')
+                this.dateFrom = getLocalEpoch(startOfWeek, 'start')
+                this.dateTo = getLocalEpoch(endOfWeek, 'end')
             } else if (this.displayType === 'Month') {
-                // this.dateFrom = getLocalEpoch(this.dateFrom, 30)
-                // this.dateTo = getLocalEpoch(this.dateTo, 30)
+                const startOfMonth = dayjs(this.dateFrom).add(1, 'month')
+                const endOfMonth = dayjs(this.dateTo).add(1, 'month')
+                this.dateFrom = getLocalEpoch(startOfMonth, 'start')
+                this.dateTo = getLocalEpoch(endOfMonth, 'end')
             } else if (this.displayType === 'Year') {
-                // this.dateFrom = getLocalEpoch(this.dateFrom, 365)
-                // this.dateTo = getLocalEpoch(this.dateTo, 365)
+                const startOfYear = dayjs(this.dateFrom).add(1, 'year')
+                const endOfYear = dayjs(this.dateTo).add(1, 'year')
+                this.dateFrom = getLocalEpoch(startOfYear, 'start')
+                this.dateTo = getLocalEpoch(endOfYear, 'end')
             }
             this.generateFilteredTransfersAndTransactions()
         },
