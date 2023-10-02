@@ -337,6 +337,9 @@ createApp({
             transactionHeads.forEach(transactionHead => {
                 transactionHead.transactions.forEach(transaction => {
                     if(transaction.categoryType === 'Expense' || transactionHead.type === 'transfer') {
+                        if(transactionHead.type === 'transfer' && transaction.accountFromIsIncludedInTotalBalance === 1 && transaction.accountToIsIncludedInTotalBalance === 1) {
+                            return
+                        }
                         accountBalance -= transaction.amountCents
                     } else {
                         accountBalance += transaction.amountCents

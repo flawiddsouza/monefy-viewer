@@ -57,6 +57,8 @@ export function getTransfers() {
             accountsTo._id AS accountToId,
             accountsFrom.title AS accountFromName,
             accountsTo.title AS accountToName,
+            accountsFrom.isIncludedInTotalBalance AS accountFromIsIncludedInTotalBalance,
+            accountsTo.isIncludedInTotalBalance AS accountToIsIncludedInTotalBalance,
             transfers.amountCents,
             transfers.note
         FROM transfers
