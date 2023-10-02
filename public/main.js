@@ -363,6 +363,10 @@ createApp({
                             if(transaction.accountFromIsIncludedInTotalBalance === 1 && transaction.accountToIsIncludedInTotalBalance === 1) {
                                 return
                             }
+                            if(transaction.accountFromIsIncludedInTotalBalance === 0 && transaction.accountToIsIncludedInTotalBalance === 1) {
+                                accountBalance += transaction.amountCents
+                                return
+                            }
                             accountBalance -= transaction.amountCents
                         }
                     }
