@@ -47,7 +47,7 @@ createApp({
                         <template v-if="transactionHead.type === 'transfer'">
                             <div v-for="transfer in transactionHead.transactions" class="mt-0_5rem">
                                 <div v-if="displayType !== 'Date' && displayType !== 'Choose Date'">{{ formatDate(transfer.createdOn) }}</div>
-                                <div>🔴 {{ formatAmount(transfer.amountCents) }} {{ transfer.note }}</div>
+                                <div><template v-if="accountId === '' || transfer.accountFromId === accountId">🔴</template><template v-else>🟢</template> {{ formatAmount(transfer.amountCents) }} {{ transfer.note }}</div>
                             </div>
                         </template>
                         <template v-if="transactionHead.type === 'transaction'">
@@ -336,13 +336,35 @@ createApp({
 
             transactionHeads.forEach(transactionHead => {
                 transactionHead.transactions.forEach(transaction => {
-                    if(transaction.categoryType === 'Expense' || transactionHead.type === 'transfer') {
-                        if(transactionHead.type === 'transfer' && transaction.accountFromIsIncludedInTotalBalance === 1 && transaction.accountToIsIncludedInTotalBalance === 1) {
-                            return
-                        }
-                        accountBalance -= transaction.amountCents
-                    } else {
+                    if (transactionHead.type === 'carryOver') {
                         accountBalance += transaction.amountCents
+                    }
+
+                    if (transactionHead.type === 'transaction') {
+                        if (transaction.categoryType === 'Expense') {
+                            accountBalance -= transaction.amountCents
+                        }
+
+                        if (transaction.categoryType === 'Income') {
+                            accountBalance += transaction.amountCents
+                        }
+                    }
+
+                    if(transactionHead.type === 'transfer') {
+                        if (this.accountId !== '') {
+                            if(transaction.accountFromId === this.accountId) {
+                                accountBalance -= transaction.amountCents
+                            }
+
+                            if(transaction.accountToId === this.accountId) {
+                                accountBalance += transaction.amountCents
+                            }
+                        } else {
+                            if(transaction.accountFromIsIncludedInTotalBalance === 1 && transaction.accountToIsIncludedInTotalBalance === 1) {
+                                return
+                            }
+                            accountBalance -= transaction.amountCents
+                        }
                     }
                 })
             })
