@@ -148,6 +148,12 @@ createApp({
             return formattedAmount
         },
         generateFilteredTransfersAndTransactions() {
+            this.carryOver = []
+            this.filteredTransfers = []
+            this.filteredTransactions = []
+            this.transactionHeads = []
+            this.accountBalance = 0
+
             let carryOver = {}
 
             let transfers = []
@@ -160,15 +166,34 @@ createApp({
 
             transfers.filter(transfer => transfer.createdOn < this.dateFrom).forEach(transfer => {
                 const accountFrom = this.accounts.find(account => account._id === transfer.accountFromId)
-                if (accountFrom.isIncludedInTotalBalance === 1) {
+                const accountTo = this.accounts.find(account => account._id === transfer.accountToId)
+
+                let isIncludedInTotalBalance1 = 1
+                let isIncludedInTotalBalance2 = 1
+
+                if (this.accountId === '') {
+                    isIncludedInTotalBalance1 = accountFrom.isIncludedInTotalBalance
+                    isIncludedInTotalBalance2 = accountTo.isIncludedInTotalBalance
+                } else {
+                    // don't include in calculation if the account is not the selected account
+                    if (transfer.accountFromId !== this.accountId) {
+                        isIncludedInTotalBalance1 = 0
+                    }
+
+                    // don't include in calculation if the account is not the selected account
+                    if (transfer.accountToId !== this.accountId) {
+                        isIncludedInTotalBalance2 = 0
+                    }
+                }
+
+                if (isIncludedInTotalBalance1 === 1) {
                     if (carryOver[transfer.accountFromId] === undefined) {
                         carryOver[transfer.accountFromId] = 0
                     }
                     carryOver[transfer.accountFromId] -= transfer.amountCents
                 }
 
-                const accountTo = this.accounts.find(account => account._id === transfer.accountToId)
-                if (accountTo.isIncludedInTotalBalance === 1) {
+                if (isIncludedInTotalBalance2 === 1) {
                     if (carryOver[transfer.accountToId] === undefined) {
                         carryOver[transfer.accountToId] = 0
                     }
@@ -293,9 +318,11 @@ createApp({
         },
     },
     async created() {
-        await this.fetchAccounts()
-        await this.fetchTransactions()
-        await this.fetchTransfers()
+        await Promise.all([
+            this.fetchAccounts(),
+            this.fetchTransactions(),
+            this.fetchTransfers()
+        ])
         this.generateFilteredTransfersAndTransactions()
     }
 }).mount('#app')

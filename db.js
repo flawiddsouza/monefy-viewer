@@ -13,7 +13,11 @@ process.on('SIGINT', () => process.exit())
 process.on('exit', closeDatabase)
 
 export function getAccounts() {
-    const accounts = db.prepare(`SELECT * FROM accounts ORDER BY title`).all()
+    const accounts = db.prepare(`
+        SELECT * FROM accounts
+        WHERE deletedOn IS NULL
+        ORDER BY title
+    `).all()
     return accounts
 }
 
