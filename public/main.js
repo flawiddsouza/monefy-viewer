@@ -17,19 +17,19 @@ createApp({
                     <option>Month</option>
                     <option>Year</option>
                     <option>All</option>
-                    <option>Interval (Give Date Range)</option>
+                    <option value="Interval">Interval (Give Date Range)</option>
                     <option>Choose Date</option>
                 </select>
-                <template v-if="displayType === 'Interval (Give Date Range)'">
-                    <input class="ml-1rem" type="date" v-model="dateFrom">
-                    <input class="ml-1rem" type="date" v-model="dateTo">
+                <template v-if="displayType === 'Interval'">
+                    <input class="ml-1rem" type="date" v-model="dateFromComp" @change="generateFilteredTransfersAndTransactions()">
+                    <input class="ml-1rem" type="date" v-model="dateToComp" @change="generateFilteredTransfersAndTransactions()">
                 </template>
                 <template v-if="displayType === 'Choose Date'">
-                    <input class="ml-1rem" type="date" v-model="dateFrom">
+                    <input class="ml-1rem" type="date" v-model="dateFromComp" @change="dateToComp = $event.target.value; generateFilteredTransfersAndTransactions();">
                 </template>
             </div>
             <div class="mt-1rem">
-                <button @click="previous" :disabled="displayType === 'All'">Previous</button> <span>{{ label }}</span> <button @click="next" :disabled="displayType === 'All'">Next</button>
+                <button @click="previous" :disabled="displayType === 'All' || displayType === 'Interval'">Previous</button> <span>{{ label }}</span> <button @click="next" :disabled="displayType === 'All' || displayType === 'Interval'">Next</button>
             </div>
             <div class="mt-1rem" style="font-size: 1.1rem;">
                 Balance: {{ formatAmount(accountBalance) }}
@@ -86,7 +86,23 @@ createApp({
             } else {
                 return formatDateRange(this.dateFrom, this.dateTo)
             }
-        }
+        },
+        dateFromComp: {
+            get() {
+                return dayjs(this.dateFrom).format('YYYY-MM-DD')
+            },
+            set(value) {
+                this.dateFrom = getLocalEpoch(value, 'start')
+            }
+        },
+        dateToComp: {
+            get() {
+                return dayjs(this.dateTo).format('YYYY-MM-DD')
+            },
+            set(value) {
+                this.dateTo = getLocalEpoch(value, 'end')
+            }
+        },
     },
     watch: {
         accountId() {
@@ -132,7 +148,7 @@ createApp({
             this.transfers = await response.json()
         },
         previous() {
-            if (this.displayType === 'Day') {
+            if (this.displayType === 'Day' || this.displayType === 'Choose Date') {
                 const date = dayjs(this.dateFrom).subtract(1, 'day')
                 this.dateFrom = getLocalEpoch(date, 'start')
                 this.dateTo = getLocalEpoch(date, 'end')
@@ -155,7 +171,7 @@ createApp({
             this.generateFilteredTransfersAndTransactions()
         },
         next() {
-            if (this.displayType === 'Day') {
+            if (this.displayType === 'Day' || this.displayType === 'Choose Date') {
                 const date = dayjs(this.dateFrom).add(1, 'day')
                 this.dateFrom = getLocalEpoch(date, 'start')
                 this.dateTo = getLocalEpoch(date, 'end')
