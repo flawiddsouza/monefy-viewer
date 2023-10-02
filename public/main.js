@@ -29,7 +29,7 @@ createApp({
                 </template>
             </div>
             <div class="mt-1rem">
-                <button @click="previous">Previous</button> <span>{{ label }}</span> <button @click="next">Next</button>
+                <button @click="previous" :disabled="displayType === 'All'">Previous</button> <span>{{ label }}</span> <button @click="next" :disabled="displayType === 'All'">Next</button>
             </div>
             <div class="mt-1rem" style="font-size: 1.1rem;">
                 Balance: {{ formatAmount(accountBalance) }}
@@ -111,6 +111,9 @@ createApp({
                 const endOfYear = dayjs().endOf('year')
                 this.dateFrom = getLocalEpoch(startOfYear, 'start')
                 this.dateTo = getLocalEpoch(endOfYear, 'end')
+            } else if (this.displayType === 'All') {
+                this.dateFrom = ''
+                this.dateTo = ''
             }
             this.generateFilteredTransfersAndTransactions()
         },
@@ -196,44 +199,44 @@ createApp({
                 transfers = this.transfers.filter(transfer => transfer.accountFromId === this.accountId || transfer.accountToId === this.accountId)
             }
 
-            transfers.filter(transfer => transfer.createdOn < this.dateFrom).forEach(transfer => {
-                const accountFrom = this.accounts.find(account => account._id === transfer.accountFromId)
-                const accountTo = this.accounts.find(account => account._id === transfer.accountToId)
-
-                let isIncludedInTotalBalance1 = 1
-                let isIncludedInTotalBalance2 = 1
-
-                if (this.accountId === '') {
-                    isIncludedInTotalBalance1 = accountFrom.isIncludedInTotalBalance
-                    isIncludedInTotalBalance2 = accountTo.isIncludedInTotalBalance
-                } else {
-                    // don't include in calculation if the account is not the selected account
-                    if (transfer.accountFromId !== this.accountId) {
-                        isIncludedInTotalBalance1 = 0
-                    }
-
-                    // don't include in calculation if the account is not the selected account
-                    if (transfer.accountToId !== this.accountId) {
-                        isIncludedInTotalBalance2 = 0
-                    }
-                }
-
-                if (isIncludedInTotalBalance1 === 1) {
-                    if (carryOver[transfer.accountFromId] === undefined) {
-                        carryOver[transfer.accountFromId] = 0
-                    }
-                    carryOver[transfer.accountFromId] -= transfer.amountCents
-                }
-
-                if (isIncludedInTotalBalance2 === 1) {
-                    if (carryOver[transfer.accountToId] === undefined) {
-                        carryOver[transfer.accountToId] = 0
-                    }
-                    carryOver[transfer.accountToId] += transfer.amountCents
-                }
-            })
-
             if (this.displayType !== 'All') {
+                transfers.filter(transfer => transfer.createdOn < this.dateFrom).forEach(transfer => {
+                    const accountFrom = this.accounts.find(account => account._id === transfer.accountFromId)
+                    const accountTo = this.accounts.find(account => account._id === transfer.accountToId)
+
+                    let isIncludedInTotalBalance1 = 1
+                    let isIncludedInTotalBalance2 = 1
+
+                    if (this.accountId === '') {
+                        isIncludedInTotalBalance1 = accountFrom.isIncludedInTotalBalance
+                        isIncludedInTotalBalance2 = accountTo.isIncludedInTotalBalance
+                    } else {
+                        // don't include in calculation if the account is not the selected account
+                        if (transfer.accountFromId !== this.accountId) {
+                            isIncludedInTotalBalance1 = 0
+                        }
+
+                        // don't include in calculation if the account is not the selected account
+                        if (transfer.accountToId !== this.accountId) {
+                            isIncludedInTotalBalance2 = 0
+                        }
+                    }
+
+                    if (isIncludedInTotalBalance1 === 1) {
+                        if (carryOver[transfer.accountFromId] === undefined) {
+                            carryOver[transfer.accountFromId] = 0
+                        }
+                        carryOver[transfer.accountFromId] -= transfer.amountCents
+                    }
+
+                    if (isIncludedInTotalBalance2 === 1) {
+                        if (carryOver[transfer.accountToId] === undefined) {
+                            carryOver[transfer.accountToId] = 0
+                        }
+                        carryOver[transfer.accountToId] += transfer.amountCents
+                    }
+                })
+
                 transfers = transfers.filter(transfer => transfer.createdOn >= this.dateFrom && transfer.createdOn <= this.dateTo)
             }
 
@@ -247,21 +250,21 @@ createApp({
                 transactions = this.transactions.filter(transaction => transaction.accountId === this.accountId)
             }
 
-            transactions.filter(transaction => transaction.createdOn < this.dateFrom).forEach(transaction => {
-                if (carryOver[transaction.accountId] === undefined) {
-                    carryOver[transaction.accountId] = 0
-                }
-
-                if (transaction.categoryType === 'Income') {
-                    carryOver[transaction.accountId] += transaction.amountCents
-                }
-
-                if (transaction.categoryType === 'Expense') {
-                    carryOver[transaction.accountId] -= transaction.amountCents
-                }
-            })
-
             if(this.displayType !== 'All') {
+                transactions.filter(transaction => transaction.createdOn < this.dateFrom).forEach(transaction => {
+                    if (carryOver[transaction.accountId] === undefined) {
+                        carryOver[transaction.accountId] = 0
+                    }
+
+                    if (transaction.categoryType === 'Income') {
+                        carryOver[transaction.accountId] += transaction.amountCents
+                    }
+
+                    if (transaction.categoryType === 'Expense') {
+                        carryOver[transaction.accountId] -= transaction.amountCents
+                    }
+                })
+
                 transactions = transactions.filter(transaction => transaction.createdOn >= this.dateFrom && transaction.createdOn <= this.dateTo)
             }
 
@@ -278,11 +281,13 @@ createApp({
 
             const transactionHeads = []
 
-            transactionHeads.push({
-                type: 'carryOver',
-                name: 'Carry Over',
-                transactions: this.carryOver
-            })
+            if (this.carryOver.length > 0) {
+                transactionHeads.push({
+                    type: 'carryOver',
+                    name: 'Carry Over',
+                    transactions: this.carryOver
+                })
+            }
 
             this.filteredTransfers.forEach(transfer => {
                 const transactionHead = transactionHeads.find(transactionHead => transactionHead.name === `${transfer.accountFromName} -> ${transfer.accountToName}` && transactionHead.type === 'transfer')
@@ -376,6 +381,13 @@ createApp({
             this.transactionHeads = transactionHeads
 
             this.accountBalance = accountBalance
+
+            if (this.displayType === 'All') {
+                const minDate = Math.min(...this.transfers.map(transfer =>  transfer.createdOn), ...this.transactions.map(transaction => transaction.createdOn))
+                const maxDate = Math.max(...this.transfers.map(transfer =>  transfer.createdOn), ...this.transactions.map(transaction => transaction.createdOn))
+                this.dateFrom = minDate
+                this.dateTo = maxDate
+            }
         },
         formatDate,
     },
