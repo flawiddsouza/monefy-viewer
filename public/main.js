@@ -37,7 +37,7 @@ createApp({
             <div class="mt-1rem">
                 <details open class="mt-1rem" v-for="transactionHead in transactionHeads">
                     <summary style="font-size: 1.1rem;">{{ transactionHead.name }} ({{ transactionHead.transactions.length }}) | {{ formatAmount(transactionHead.transactions.reduce((acc, prev) => acc + prev.amountCents, 0)) }}</summary>
-                    <div class="mt-0_5rem" style="margin-left: 1.2rem;">
+                    <div class="mt-0_5rem" style="margin-left: 1.2rem; width: 40rem;">
                         <template v-if="transactionHead.type === 'carryOver'">
                             <div v-for="carryOver in transactionHead.transactions" class="mt-0_5rem">
                                 <div v-if="accountId === ''">{{ carryOver.accountName }}</div>
