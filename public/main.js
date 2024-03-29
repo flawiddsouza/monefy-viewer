@@ -133,6 +133,16 @@ createApp({
             }
             this.generateFilteredTransfersAndTransactions()
         },
+        dateFrom() {
+            const url = new URL(window.location.href)
+            url.searchParams.set('dateFrom', dayjs(this.dateFrom).toISOString().replaceAll(':', '_'))
+            window.history.pushState({}, '', url)
+        },
+        dateTo() {
+            const url = new URL(window.location.href)
+            url.searchParams.set('dateTo', dayjs(this.dateTo).toISOString().replaceAll(':', '_'))
+            window.history.pushState({}, '', url)
+        },
     },
     methods: {
         async fetchAccounts() {
@@ -408,11 +418,21 @@ createApp({
         formatDate,
     },
     async created() {
+        const url = new URL(window.location.href)
+        const dateFrom = url.searchParams.get('dateFrom')
+        const dateTo = url.searchParams.get('dateTo')
+
+        if(dateFrom !== null && dateTo !== null) {
+            this.dateFrom = dayjs(dateFrom.replaceAll('_', ':')).valueOf()
+            this.dateTo = dayjs(dateTo.replaceAll('_', ':')).valueOf()
+        }
+
         await Promise.all([
             this.fetchAccounts(),
             this.fetchTransactions(),
             this.fetchTransfers()
         ])
+
         this.generateFilteredTransfersAndTransactions()
     }
 }).mount('#app')
