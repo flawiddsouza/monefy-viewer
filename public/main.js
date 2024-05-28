@@ -3,18 +3,17 @@ import { formatDate, formatDateRange, getLocalEpoch } from './helpers.js'
 
 const todayEpoch = new Date()
 
-const AmountDisplay = {
-    props: {
-        amount: {
-            type: [String, Number],
-            required: true
-        },
-    },
+const EasySelectionSpan = {
     template: /*html*/ `
-        <span contenteditable="true" style="outline: 0" @keydown="handleKeyboard" @cut.prevent @paste.prevent>{{ amount }}</span>
+        <span contenteditable="true" style="outline: 0" @keydown="handleKeyboard" @cut.prevent @paste.prevent><slot></slot></span>
     `,
     methods: {
         handleKeyboard(event) {
+            // Allow Ctrl+A
+            if (event.ctrlKey && event.key.toLowerCase() === 'a') {
+                return
+            }
+
             // Allow Ctrl+C
             if (event.ctrlKey && event.key.toLowerCase() === 'c') {
                 return
@@ -32,7 +31,7 @@ const AmountDisplay = {
 
 createApp({
     components: {
-        AmountDisplay
+        EasySelectionSpan
     },
     template: /*html*/ `
         <div>
@@ -76,20 +75,20 @@ createApp({
                         <template v-if="transactionHead.type === 'carryOver'">
                             <div v-for="carryOver in transactionHead.transactions" class="mt-0_5rem">
                                 <div v-if="accountId === ''">{{ carryOver.accountName }}</div>
-                                <div>🔃 <AmountDisplay :amount="formatAmount(carryOver.amountCents)" /></div>
+                                <div>🔃 <EasySelectionSpan>{{ formatAmount(carryOver.amountCents) }}</EasySelectionSpan></div>
                             </div>
                         </template>
                         <template v-if="transactionHead.type === 'transfer'">
                             <div v-for="transfer in transactionHead.transactions" class="mt-0_5rem">
                                 <div v-if="displayType !== 'Date' && displayType !== 'Choose Date'">{{ formatDate(transfer.createdOn) }}</div>
-                                <div><template v-if="accountId === '' || transfer.accountFromId === accountId">🔴</template><template v-else>🟢</template> <AmountDisplay :amount="formatAmount(transfer.amountCents)" /> {{ transfer.note }}</div>
+                                <div><template v-if="accountId === '' || transfer.accountFromId === accountId">🔴</template><template v-else>🟢</template> <EasySelectionSpan>{{ formatAmount(transfer.amountCents) }}</EasySelectionSpan> <EasySelectionSpan>{{ transfer.note }}</EasySelectionSpan></div>
                             </div>
                         </template>
                         <template v-if="transactionHead.type === 'transaction'">
                             <div v-for="transaction in transactionHead.transactions" class="mt-0_5rem">
                                 <div v-if="displayType !== 'Date' && displayType !== 'Choose Date'">{{ formatDate(transaction.createdOn) }}</div>
                                 <div v-if="accountId === ''">{{ transaction.accountName }}</div>
-                                <div><template v-if="transaction.categoryType === 'Income'">🟢</template><template v-else>🔴</template> <AmountDisplay :amount="formatAmount(transaction.amountCents)" /> {{ transaction.note }}</div>
+                                <div><template v-if="transaction.categoryType === 'Income'">🟢</template><template v-else>🔴</template> <EasySelectionSpan>{{ formatAmount(transaction.amountCents) }}</EasySelectionSpan> <EasySelectionSpan>{{ transaction.note }}</EasySelectionSpan></div>
                             </div>
                         </template>
                     </div>
