@@ -5,10 +5,15 @@ const todayEpoch = new Date()
 
 const EasySelectionSpan = {
     template: /*html*/ `
-        <span contenteditable="true" style="outline: 0" @keydown="handleKeyboard" @cut.prevent @paste.prevent><slot></slot></span>
+        <span contenteditable="true" style="outline: 0" @keydown="handleKeyboard" @cut.prevent @paste.prevent spellcheck="false"><slot></slot></span>
     `,
     methods: {
         handleKeyboard(event) {
+            // Allow Ctrl+F
+            if (event.ctrlKey && event.key.toLowerCase() === 'f') {
+                return
+            }
+
             // Allow Ctrl+A
             if (event.ctrlKey && event.key.toLowerCase() === 'a') {
                 return
