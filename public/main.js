@@ -27,6 +27,11 @@ createApp({
                 <template v-if="displayType === 'Choose Date'">
                     <input class="ml-1rem" type="date" v-model="dateFromComp" @change="dateToComp = $event.target.value; generateFilteredTransfersAndTransactions();">
                 </template>
+                <span class="ml-1rem">
+                    <label style="user-select: none">
+                        <input type="checkbox" v-model="formatAmounts"> Format Amounts
+                    </label>
+                </span>
             </div>
             <div class="mt-1rem">
                 <button @click="previous" :disabled="displayType === 'All' || displayType === 'Interval'">Previous</button> <span>{{ label }}</span> <button @click="next" :disabled="displayType === 'All' || displayType === 'Interval'">Next</button>
@@ -69,6 +74,7 @@ createApp({
             displayType: 'Day',
             dateFrom: getLocalEpoch(todayEpoch, 'start'),
             dateTo: getLocalEpoch(todayEpoch, 'end'),
+            formatAmounts: true,
             balance: 0,
             carryOver: [],
             transfers: [],
@@ -143,6 +149,9 @@ createApp({
             url.searchParams.set('dateTo', dayjs(this.dateTo).toISOString().replaceAll(':', '_'))
             window.history.pushState({}, '', url)
         },
+        formatAmounts() {
+            localStorage.setItem('MonefyViewer-formatAmounts', this.formatAmounts ? 'true' : 'false')
+        },
     },
     methods: {
         async fetchAccounts() {
@@ -205,6 +214,11 @@ createApp({
         },
         formatAmount(amountCents) {
             const amount = amountCents / 1000
+
+            if (!this.formatAmounts) {
+                return amount
+            }
+
             const formattedAmount = amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
             return formattedAmount
         },
@@ -418,6 +432,8 @@ createApp({
         formatDate,
     },
     async created() {
+        this.formatAmounts = localStorage.getItem('MonefyViewer-formatAmounts') === 'false' ? false : true
+
         const url = new URL(window.location.href)
         const dateFrom = url.searchParams.get('dateFrom')
         const dateTo = url.searchParams.get('dateTo')
