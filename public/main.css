@@ -21,3 +21,214 @@ html, body {
 .mt-0_5rem {
     margin-top: 0.5rem;
 }
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal {
+    background: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.modal-header button {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-header button:hover {
+    background-color: #f0f0f0;
+    border-radius: 4px;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-body p {
+    margin-top: 0;
+    margin-bottom: 0.75rem;
+}
+
+.modal-body h3 {
+    margin-top: 0;
+}
+
+.diff-summary {
+    background-color: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 1rem;
+}
+
+.diff-item {
+    margin-bottom: 0.75rem;
+    padding: 0.5rem;
+    background-color: white;
+    border-radius: 4px;
+}
+
+.diff-item:last-child {
+    margin-bottom: 0;
+}
+
+.diff-before {
+    margin-left: 1rem;
+    color: #666;
+}
+
+.diff-after {
+    margin-left: 1rem;
+    color: #007bff;
+    font-weight: 500;
+}
+
+.diff-change {
+    margin-left: 0.5rem;
+    color: #28a745;
+    font-weight: bold;
+}
+
+.diff-same {
+    margin-left: 0.5rem;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.date-range {
+    margin-top: 0.25rem;
+    margin-left: 1rem;
+    color: #666;
+}
+
+.detail-list {
+    margin-top: 0.5rem;
+    margin-left: 1rem;
+    max-height: 300px;
+    overflow-y: auto;
+    font-size: 0.9rem;
+    list-style: none;
+    padding-left: 0;
+}
+
+.detail-list li {
+    margin-bottom: 0.5rem;
+    padding: 0.25rem;
+    background-color: #f9f9f9;
+    border-left: 3px solid #007bff;
+    padding-left: 0.5rem;
+}
+
+.detail-list-deleted li {
+    background-color: #ffe6e6;
+    border-left-color: #dc3545;
+    text-decoration: line-through;
+    opacity: 0.8;
+}
+
+.income {
+    color: #28a745;
+}
+
+.expense {
+    color: #dc3545;
+}
+
+.diff-negative {
+    margin-left: 0.5rem;
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.diff-summary details summary {
+    cursor: pointer;
+    user-select: none;
+    padding: 0.25rem 0;
+}
+
+.diff-summary details summary:hover {
+    background-color: #f0f0f0;
+    padding-left: 0.25rem;
+}
+
+.btn-import {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.btn-import:hover:not(:disabled) {
+    background-color: #218838;
+}
+
+.btn-import:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+.success-message {
+    text-align: center;
+    padding: 2rem;
+}
+
+.success-message h3 {
+    color: #28a745;
+    margin-bottom: 1rem;
+}
+
+.error-message {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 0.75rem;
+    border-radius: 4px;
+    border: 1px solid #f5c6cb;
+}
+
+button {
+    cursor: pointer;
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}

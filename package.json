@@ -4,7 +4,8 @@
     "dependencies": {
         "better-sqlite3": "^11.1.2",
         "dayjs": "^1.11.18",
-        "express": "^5.0.0-beta.1"
+        "express": "^5.0.0-beta.1",
+        "multer": "^2.0.2"
     },
     "scripts": {
         "start": "node app.js",

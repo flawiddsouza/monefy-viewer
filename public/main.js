@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import { formatDate, formatDateRange, getLocalEpoch } from './helpers.js'
+import ImportModal from './ImportModal.js'
 
 const todayEpoch = new Date()
 
@@ -36,12 +37,14 @@ const EasySelectionSpan = {
 
 createApp({
     components: {
-        EasySelectionSpan
+        EasySelectionSpan,
+        ImportModal
     },
     template: /*html*/ `
         <div>
             <div>
-                <select v-model="accountId">
+                <button @click="showImportModal = true">Import Database</button>
+                <select class="ml-1rem" v-model="accountId">
                     <option value="">All accounts</option>
                     <option v-for="account in accounts" :value="account._id">{{ account.title }}</option>
                 </select>
@@ -99,6 +102,12 @@ createApp({
                     </div>
                 </details>
             </div>
+
+            <ImportModal
+                :show="showImportModal"
+                :formatAmounts="formatAmounts"
+                @close="showImportModal = false"
+            />
         </div>
     `,
     data() {
@@ -117,6 +126,7 @@ createApp({
             filteredTransactions: [],
             transactionHeads: [],
             accountBalance: 0,
+            showImportModal: false,
         }
     },
     computed: {
