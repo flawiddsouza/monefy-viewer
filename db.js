@@ -87,10 +87,62 @@ export function getTransfers() {
     return transfers
 }
 
+function initializeSchemaFromSource(sourceDb) {
+    // Get all table creation statements from the source database
+    const tables = sourceDb.prepare(`
+        SELECT sql FROM sqlite_master
+        WHERE type='table' AND sql IS NOT NULL
+        ORDER BY name
+    `).all()
+
+    // Create tables in the current database
+    for (const table of tables) {
+        db.prepare(table.sql).run()
+    }
+
+    // Get all index creation statements from the source database
+    const indices = sourceDb.prepare(`
+        SELECT sql FROM sqlite_master
+        WHERE type='index' AND sql IS NOT NULL
+        ORDER BY name
+    `).all()
+
+    // Create indices in the current database
+    for (const index of indices) {
+        db.prepare(index.sql).run()
+    }
+}
+
 export function compareDatabase(newDbPath) {
     const newDb = new Database(newDbPath, { readonly: true })
 
     try {
+        // Check if the new database has the required tables
+        const requiredTables = ['accounts', 'transactions', 'transfers', 'categories']
+        const newDbTables = newDb.prepare(`
+            SELECT name FROM sqlite_master WHERE type='table' AND name IN (${requiredTables.map(() => '?').join(',')})
+        `).all(...requiredTables).map(row => row.name)
+
+        const missingTablesInNew = requiredTables.filter(table => !newDbTables.includes(table))
+
+        if (missingTablesInNew.length > 0) {
+            newDb.close()
+            throw new Error(`Invalid Monefy database: missing required tables (${missingTablesInNew.join(', ')})`)
+        }
+
+        // Check if the current database has the required tables
+        const currentDbTables = db.prepare(`
+            SELECT name FROM sqlite_master WHERE type='table' AND name IN (${requiredTables.map(() => '?').join(',')})
+        `).all(...requiredTables).map(row => row.name)
+
+        const missingTablesInCurrent = requiredTables.filter(table => !currentDbTables.includes(table))
+
+        // If current database is missing tables, initialize schema from the new database
+        if (missingTablesInCurrent.length > 0) {
+            console.log('Current database is empty or incomplete. Initializing schema from source...')
+            initializeSchemaFromSource(newDb)
+        }
+
         // Get counts for all records (including deleted)
         const currentCounts = {
             accounts: db.prepare('SELECT COUNT(*) as count FROM accounts WHERE deletedOn IS NULL').get().count,
@@ -216,14 +268,12 @@ export function compareDatabase(newDbPath) {
 
         // Transactions
         const currentTransactionIds = new Set(currentTransactionsList.map(t => t._id))
-        const newTransactionIds = new Set(newTransactionsList.map(t => t._id))
 
         const transactionsToAdd = newTransactionsList.filter(t => !currentTransactionIds.has(t._id) && !t.deletedOn)
         const transactionsToDelete = currentTransactionsList.filter(t => !t.deletedOn && newTransactionsList.find(nt => nt._id === t._id && nt.deletedOn))
 
         // Transfers
         const currentTransferIds = new Set(currentTransfersList.map(t => t._id))
-        const newTransferIds = new Set(newTransfersList.map(t => t._id))
 
         const transfersToAdd = newTransfersList.filter(t => !currentTransferIds.has(t._id) && !t.deletedOn)
         const transfersToDelete = currentTransfersList.filter(t => !t.deletedOn && newTransfersList.find(nt => nt._id === t._id && nt.deletedOn))
@@ -291,6 +341,32 @@ export function importDatabase(newDbPath) {
     const newDb = new Database(newDbPath, { readonly: true })
 
     try {
+        // Check if the new database has the required tables
+        const requiredTables = ['accounts', 'transactions', 'transfers', 'categories']
+        const newDbTables = newDb.prepare(`
+            SELECT name FROM sqlite_master WHERE type='table' AND name IN (${requiredTables.map(() => '?').join(',')})
+        `).all(...requiredTables).map(row => row.name)
+
+        const missingTablesInNew = requiredTables.filter(table => !newDbTables.includes(table))
+
+        if (missingTablesInNew.length > 0) {
+            newDb.close()
+            throw new Error(`Invalid Monefy database: missing required tables (${missingTablesInNew.join(', ')})`)
+        }
+
+        // Check if the current database has the required tables
+        const currentDbTables = db.prepare(`
+            SELECT name FROM sqlite_master WHERE type='table' AND name IN (${requiredTables.map(() => '?').join(',')})
+        `).all(...requiredTables).map(row => row.name)
+
+        const missingTablesInCurrent = requiredTables.filter(table => !currentDbTables.includes(table))
+
+        // If current database is missing tables, initialize schema from the new database
+        if (missingTablesInCurrent.length > 0) {
+            console.log('Current database is empty or incomplete. Initializing schema from source...')
+            initializeSchemaFromSource(newDb)
+        }
+
         // Get all data from new database FIRST (while newDb is still open)
         const newAccounts = newDb.prepare('SELECT * FROM accounts').all()
         const newCategories = newDb.prepare('SELECT * FROM categories').all()
