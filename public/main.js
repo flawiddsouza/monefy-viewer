@@ -221,8 +221,9 @@ createApp({
                 this.dateFrom = getLocalEpoch(startOfWeek, 'start')
                 this.dateTo = getLocalEpoch(endOfWeek, 'end')
             } else if (this.displayType === 'Month') {
-                const startOfMonth = dayjs(this.dateFrom).subtract(1, 'month')
-                const endOfMonth = dayjs(this.dateFrom).subtract(1, 'month').endOf('month')
+                const month = dayjs(this.dateFrom).subtract(1, 'month')
+                const startOfMonth = month.startOf('month')
+                const endOfMonth = month.endOf('month')
                 this.dateFrom = getLocalEpoch(startOfMonth, 'start')
                 this.dateTo = getLocalEpoch(endOfMonth, 'end')
             } else if (this.displayType === 'Year') {
@@ -244,8 +245,9 @@ createApp({
                 this.dateFrom = getLocalEpoch(startOfWeek, 'start')
                 this.dateTo = getLocalEpoch(endOfWeek, 'end')
             } else if (this.displayType === 'Month') {
-                const startOfMonth = dayjs(this.dateFrom).add(1, 'month').startOf('month')
-                const endOfMonth = dayjs(this.dateFrom).add(1, 'month').endOf('month')
+                const month = dayjs(this.dateFrom).add(1, 'month')
+                const startOfMonth = month.startOf('month')
+                const endOfMonth = month.endOf('month')
                 this.dateFrom = getLocalEpoch(startOfMonth, 'start')
                 this.dateTo = getLocalEpoch(endOfMonth, 'end')
             } else if (this.displayType === 'Year') {
