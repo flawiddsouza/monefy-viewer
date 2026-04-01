@@ -10,6 +10,34 @@ const dbPath = path.join(__dirname, 'data', 'monefy.db')
 let db = new Database(dbPath)
 
 db.pragma('journal_mode = WAL')
+db.pragma('foreign_keys = ON')
+
+function ensureAppSchema() {
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+            createdAt INTEGER NOT NULL
+        );
+    `)
+
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS item_tags (
+            item_type TEXT NOT NULL,
+            item_id   TEXT NOT NULL,
+            tag_id    INTEGER NOT NULL,
+            createdAt INTEGER NOT NULL,
+            PRIMARY KEY (item_type, item_id, tag_id),
+            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_item_tags_item
+            ON item_tags (item_type, item_id);
+        CREATE INDEX IF NOT EXISTS idx_item_tags_tag_id
+            ON item_tags (tag_id);
+    `)
+}
+
+ensureAppSchema()
 
 function closeDatabase() {
     console.log('Closing the database connection.')
@@ -24,6 +52,8 @@ function reopenDatabase() {
     }
     db = new Database(dbPath)
     db.pragma('journal_mode = WAL')
+    db.pragma('foreign_keys = ON')
+    ensureAppSchema()
 }
 
 process.on('SIGINT', () => process.exit())
@@ -46,6 +76,7 @@ export function getCategories() {
 export function getTransactions() {
     const transactions = db.prepare(`
         SELECT
+            transactions._id AS transactionId,
             transactions.createdOn,
             accounts._id AS accountId,
             accounts.title AS accountName,
@@ -63,12 +94,172 @@ export function getTransactions() {
         ORDER BY transactions.createdOn DESC
     `).all()
 
-    return transactions
+    if (transactions.length === 0) {
+        return transactions
+    }
+
+    const tagsByTransactionId = new Map()
+    const transactionTags = db.prepare(`
+        SELECT
+            item_tags.item_id AS itemId,
+            tags.id,
+            tags.name
+        FROM item_tags
+        JOIN tags ON tags.id = item_tags.tag_id
+        JOIN transactions ON transactions._id = item_tags.item_id
+        JOIN accounts ON accounts._id = transactions.account_id
+        WHERE item_tags.item_type = 'transaction'
+        AND transactions.deletedOn IS NULL
+        AND accounts.deletedOn IS NULL
+        ORDER BY
+            item_tags.item_id,
+            item_tags.createdAt,
+            item_tags.rowid
+    `).all()
+
+    for (const tag of transactionTags) {
+        if (!tagsByTransactionId.has(tag.itemId)) {
+            tagsByTransactionId.set(tag.itemId, [])
+        }
+        tagsByTransactionId.get(tag.itemId).push({ id: tag.id, name: tag.name })
+    }
+
+    return transactions.map(transaction => ({
+        ...transaction,
+        tags: tagsByTransactionId.get(transaction.transactionId) ?? []
+    }))
+}
+
+export function getTags() {
+    const tags = db.prepare(`
+        SELECT
+            tags.id,
+            tags.name,
+            COUNT(DISTINCT CASE
+                WHEN item_tags.item_type = 'transaction'
+                    AND transactions.deletedOn IS NULL
+                    AND accounts.deletedOn IS NULL
+                    THEN item_tags.item_id
+                WHEN item_tags.item_type = 'transfer'
+                    AND transfers.deletedOn IS NULL
+                    THEN item_tags.item_id
+                ELSE NULL
+            END) AS transactionCount
+        FROM tags
+        LEFT JOIN item_tags ON item_tags.tag_id = tags.id
+        LEFT JOIN transactions ON item_tags.item_type = 'transaction'
+            AND transactions._id = item_tags.item_id
+        LEFT JOIN accounts ON accounts._id = transactions.account_id
+        LEFT JOIN transfers ON item_tags.item_type = 'transfer'
+            AND transfers._id = item_tags.item_id
+        GROUP BY tags.id, tags.name
+        ORDER BY tags.name COLLATE NOCASE, tags.id
+    `).all()
+
+    return tags
+}
+
+function normalizeTagName(name) {
+    return `${name ?? ''}`.replace(/\s+/g, ' ').trim()
+}
+
+function getItemTags(itemType, itemId) {
+    return db.prepare(`
+        SELECT tags.id, tags.name
+        FROM item_tags
+        JOIN tags ON tags.id = item_tags.tag_id
+        WHERE item_tags.item_type = ? AND item_tags.item_id = ?
+        ORDER BY item_tags.createdAt, item_tags.rowid
+    `).all(itemType, itemId)
+}
+
+function deleteUnusedTags() {
+    db.prepare(`
+        DELETE FROM tags
+        WHERE id IN (
+            SELECT tags.id
+            FROM tags
+            LEFT JOIN item_tags ON item_tags.tag_id = tags.id
+            WHERE item_tags.tag_id IS NULL
+        )
+    `).run()
+}
+
+export function createTag(name) {
+    const normalizedName = normalizeTagName(name)
+
+    if (normalizedName === '') {
+        throw new Error('Tag name is required')
+    }
+
+    const existingTag = db.prepare(`
+        SELECT id, name
+        FROM tags
+        WHERE name = ? COLLATE NOCASE
+    `).get(normalizedName)
+
+    if (existingTag) {
+        return { ...existingTag, created: false }
+    }
+
+    const result = db.prepare(`
+        INSERT INTO tags (name, createdAt)
+        VALUES (?, ?)
+    `).run(normalizedName, Date.now())
+
+    return { id: result.lastInsertRowid, name: normalizedName, created: true }
+}
+
+export function updateItemTags(itemType, itemId, tagIds) {
+    if (itemType !== 'transaction' && itemType !== 'transfer') {
+        throw new Error(`Unknown item type: ${itemType}`)
+    }
+    const table = itemType === 'transaction' ? 'transactions' : 'transfers'
+    const existingItem = db.prepare(`SELECT _id FROM ${table} WHERE _id = ?`).get(itemId)
+    if (!existingItem) {
+        throw new Error(`${itemType === 'transaction' ? 'Transaction' : 'Transfer'} not found`)
+    }
+
+    const normalizedTagIds = [...new Set(
+        (Array.isArray(tagIds) ? tagIds : [])
+            .map(tagId => Number(tagId))
+            .filter(tagId => Number.isInteger(tagId) && tagId > 0)
+    )]
+
+    if (normalizedTagIds.length > 0) {
+        const placeholders = normalizedTagIds.map(() => '?').join(', ')
+        const knownTags = db.prepare(
+            `SELECT id FROM tags WHERE id IN (${placeholders})`
+        ).all(...normalizedTagIds)
+
+        if (knownTags.length !== normalizedTagIds.length) {
+            throw new Error('One or more tags do not exist')
+        }
+    }
+
+    const deleteStmt = db.prepare(`DELETE FROM item_tags WHERE item_type = ? AND item_id = ?`)
+    const insertTagLink = db.prepare(`
+        INSERT INTO item_tags (item_type, item_id, tag_id, createdAt)
+        VALUES (?, ?, ?, ?)
+    `)
+
+    const replaceItemTags = db.transaction(() => {
+        deleteStmt.run(itemType, itemId)
+        const now = Date.now()
+        for (const tagId of normalizedTagIds) {
+            insertTagLink.run(itemType, itemId, tagId, now)
+        }
+        deleteUnusedTags()
+    })
+
+    replaceItemTags()
+    return getItemTags(itemType, itemId)
 }
 
 export function getTransfers() {
     const transfers = db.prepare(`
         SELECT
+            transfers._id AS transferId,
             transfers.createdOn,
             accountsFrom._id AS accountFromId,
             accountsTo._id AS accountToId,
@@ -84,7 +275,37 @@ export function getTransfers() {
         WHERE transfers.deletedOn IS NULL
         ORDER BY transfers.createdOn DESC
     `).all()
-    return transfers
+
+    if (transfers.length === 0) return transfers
+
+    const tagsByTransferId = new Map()
+    const transferTags = db.prepare(`
+        SELECT
+            item_tags.item_id AS itemId,
+            tags.id,
+            tags.name
+        FROM item_tags
+        JOIN tags ON tags.id = item_tags.tag_id
+        JOIN transfers ON transfers._id = item_tags.item_id
+        WHERE item_tags.item_type = 'transfer'
+        AND transfers.deletedOn IS NULL
+        ORDER BY
+            item_tags.item_id,
+            item_tags.createdAt,
+            item_tags.rowid
+    `).all()
+
+    for (const tag of transferTags) {
+        if (!tagsByTransferId.has(tag.itemId)) {
+            tagsByTransferId.set(tag.itemId, [])
+        }
+        tagsByTransferId.get(tag.itemId).push({ id: tag.id, name: tag.name })
+    }
+
+    return transfers.map(transfer => ({
+        ...transfer,
+        tags: tagsByTransferId.get(transfer.transferId) ?? []
+    }))
 }
 
 function initializeSchemaFromSource(sourceDb) {

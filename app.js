@@ -8,6 +8,9 @@ import {
     getCategories,
     getTransactions,
     getTransfers,
+    getTags,
+    createTag,
+    updateItemTags,
     compareDatabase,
     importDatabase,
 } from './db.js'
@@ -16,6 +19,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const app = express()
+app.use(express.json())
 
 // Configure multer for file uploads
 const upload = multer({
@@ -45,6 +49,36 @@ app.get('/transactions', (req, res) => {
     const transactions = getTransactions()
     res.json(transactions)
 })
+
+app.get('/tags', (req, res) => {
+    const tags = getTags()
+    res.json(tags)
+})
+
+app.post('/tags', (req, res) => {
+    try {
+        const { created, ...tag } = createTag(req.body?.name)
+        res.status(created ? 201 : 200).json({ tag, created })
+    } catch (error) {
+        res.status(400).json({ error: error.message })
+    }
+})
+
+function makeUpdateItemTagsHandler(itemType, paramName) {
+    const notFoundMessage = `${itemType[0].toUpperCase()}${itemType.slice(1)} not found`
+    return (req, res) => {
+        try {
+            const tags = updateItemTags(itemType, req.params[paramName], req.body?.tagIds)
+            res.json({ tags })
+        } catch (error) {
+            const statusCode = error.message === notFoundMessage ? 404 : 400
+            res.status(statusCode).json({ error: error.message })
+        }
+    }
+}
+
+app.put('/transactions/:transactionId/tags', makeUpdateItemTagsHandler('transaction', 'transactionId'))
+app.put('/transfers/:transferId/tags', makeUpdateItemTagsHandler('transfer', 'transferId'))
 
 app.get('/transfers', (req, res) => {
     const transfers = getTransfers()

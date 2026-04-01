@@ -10,6 +10,13 @@ html, body {
     padding-bottom: 1rem;
 }
 
+.toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0;
+    align-items: center;
+}
+
 .ml-1rem {
     margin-left: 1rem;
 }
@@ -231,4 +238,151 @@ button {
 button:disabled {
     cursor: not-allowed;
     opacity: 0.6;
+}
+
+.transaction-list {
+    margin-left: 1.2rem;
+    width: 40rem;
+    max-width: calc(100vw - 3rem);
+}
+
+.transaction-card {
+    padding: 0.15rem 0 0.8rem;
+    border-bottom: 1px solid #ececec;
+}
+
+.tag-section {
+    margin-top: 0.45rem;
+}
+
+.tag-composer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+    overflow: visible;
+    width: 100%;
+}
+
+.tag-input-area {
+    position: relative;
+    flex: 1 1 6rem;
+    min-width: 6rem;
+}
+
+.tag-inline-input {
+    width: 100%;
+    min-width: 0;
+    min-height: 1.8rem;
+    border: 0;
+    outline: 0;
+    padding: 0.2rem 0;
+    background: transparent;
+}
+
+.tag-suggestions {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    left: 0;
+    width: 12rem;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    background: white;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+    z-index: 10;
+}
+
+.tag-suggestion {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 0.55rem 0.8rem;
+    border: 0;
+    border-bottom: 1px solid #eef2f7;
+    background: white;
+}
+
+.tag-suggestion:last-child {
+    border-bottom: 0;
+}
+
+.tag-suggestion:hover:not(:disabled) {
+    background: #f8fafc;
+}
+
+.tag-editor-hint {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    left: 0;
+    width: 12rem;
+    padding: 0.55rem 0.8rem;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    background: white;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+    color: #6b7280;
+    font-size: 0.85rem;
+    z-index: 10;
+}
+
+.tag-chip {
+    flex: 0 0 auto;
+    border: 1px solid #9ec5fe;
+    background: #e7f1ff;
+    color: #084298;
+    border-radius: 8px;
+    padding: 0.2rem 0.7rem;
+    font-size: 0.85rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    font-family: inherit;
+}
+
+.tag-chip-remove {
+    cursor: pointer;
+}
+
+.tag-chip-remove:hover:not(:disabled) {
+    background: #dbeafe;
+}
+
+.tag-empty {
+    color: #666;
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+.tag-input-area:not(:focus-within) .tag-suggestions,
+.tag-input-area:not(:focus-within) .tag-editor-hint {
+    display: none;
+}
+
+@media (max-width: 800px) {
+    .ml-1rem {
+        margin-left: 0;
+    }
+
+    .toolbar,
+    .tag-composer {
+        gap: 0.5rem;
+    }
+
+    .toolbar > * {
+        width: 100%;
+    }
+
+    .tag-input-area {
+        flex: 1 1 100%;
+        min-width: 100%;
+    }
+
+    .tag-suggestions,
+    .tag-editor-hint {
+        width: 100%;
+    }
 }
