@@ -5,6 +5,17 @@ import ImportModal from './ImportModal.js'
 const todayEpoch = new Date()
 const DEFAULT_DISPLAY_TYPE = 'Day'
 const DISPLAY_TYPES = new Set(['Day', 'Week', 'Month', 'Year', 'All', 'Interval', 'Choose Date'])
+const THEME_STORAGE_KEY = 'MonefyViewer-theme'
+const FORMAT_AMOUNT_STORAGE_KEY = 'MonefyViewer-formatAmounts'
+const DISPLAY_TYPE_OPTIONS = [
+    { value: 'Day', label: 'Day' },
+    { value: 'Week', label: 'Week' },
+    { value: 'Month', label: 'Month' },
+    { value: 'Year', label: 'Year' },
+    { value: 'All', label: 'All' },
+    { value: 'Interval', label: 'Interval (Give Date Range)' },
+    { value: 'Choose Date', label: 'Choose Date' }
+]
 
 function getDefaultDateRange(displayType) {
     if (displayType === 'Week') {
@@ -38,6 +49,37 @@ function getDefaultDateRange(displayType) {
     }
 }
 
+function parseUrlDate(value) {
+    if (value === null) return null
+
+    const parsedDate = dayjs(value.replaceAll('_', ':'))
+    return parsedDate.isValid() ? parsedDate.valueOf() : null
+}
+
+function getInitialAppState() {
+    const defaultDateRange = getDefaultDateRange(DEFAULT_DISPLAY_TYPE)
+    const url = new URL(window.location.href)
+    const requestedDisplayType = url.searchParams.get('display_type')
+    const displayType = requestedDisplayType !== null && DISPLAY_TYPES.has(requestedDisplayType)
+        ? requestedDisplayType
+        : DEFAULT_DISPLAY_TYPE
+    const parsedDateFrom = parseUrlDate(url.searchParams.get('date_from'))
+    const parsedDateTo = parseUrlDate(url.searchParams.get('date_to'))
+    const fallbackDateRange = displayType === 'Interval' || displayType === 'Choose Date'
+        ? defaultDateRange
+        : getDefaultDateRange(displayType)
+
+    return {
+        accountId: url.searchParams.get('account_id') ?? '',
+        selectedTagId: url.searchParams.get('tag_id') ?? '',
+        displayType,
+        dateFrom: parsedDateFrom ?? fallbackDateRange.dateFrom,
+        dateTo: parsedDateTo ?? fallbackDateRange.dateTo,
+        formatAmounts: localStorage.getItem(FORMAT_AMOUNT_STORAGE_KEY) === 'false' ? false : true,
+        theme: localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark'
+    }
+}
+
 const EasySelectionSpan = {
     template: /*html*/ `<span contenteditable="true" style="outline: 0" @keydown="handleKeyboard" @cut.prevent @paste.prevent spellcheck="false"><slot></slot></span>`,
     methods: {
@@ -52,173 +94,209 @@ const EasySelectionSpan = {
 createApp({
     components: { EasySelectionSpan, ImportModal },
     template: /*html*/ `
-        <div>
-            <div class="toolbar">
-                <button @click="showImportModal = true">Import Database</button>
-                <select class="ml-1rem" v-model="accountId">
-                    <option value="">All accounts</option>
-                    <option v-for="account in accounts" :key="account._id" :value="account._id">{{ account.title }}</option>
-                </select>
-                <select class="ml-1rem" v-model="selectedTagId">
-                    <option value="">All</option>
-                    <option value="tagged">All with tags</option>
-                    <option v-for="tag in tags" :key="tag.id" :value="String(tag.id)">{{ tag.name }} ({{ tag.transactionCount }})</option>
-                </select>
-                <select class="ml-1rem" v-model="displayType">
-                    <option>Day</option>
-                    <option>Week</option>
-                    <option>Month</option>
-                    <option>Year</option>
-                    <option>All</option>
-                    <option value="Interval">Interval (Give Date Range)</option>
-                    <option>Choose Date</option>
-                </select>
-                <template v-if="displayType === 'Interval'">
-                    <input class="ml-1rem" type="date" v-model="dateFromComp" @change="generateFilteredTransfersAndTransactions()">
-                    <input class="ml-1rem" type="date" v-model="dateToComp" @change="generateFilteredTransfersAndTransactions()">
-                </template>
-                <template v-if="displayType === 'Choose Date'">
-                    <input class="ml-1rem" type="date" v-model="dateFromComp" @change="dateToComp = $event.target.value; generateFilteredTransfersAndTransactions();">
-                </template>
-                <span class="ml-1rem">
-                    <label style="user-select: none"><input type="checkbox" v-model="formatAmounts"> Format Amounts</label>
-                </span>
-            </div>
-            <div class="mt-0_5rem" v-if="selectedTagId === 'tagged'">Showing only tagged transactions.</div>
-            <div class="mt-0_5rem" v-else-if="selectedTagId !== ''">Showing only transactions tagged <strong>{{ selectedTagName }}</strong>.</div>
-            <div class="mt-1rem">
-                <button @click="previous" :disabled="displayType === 'All' || displayType === 'Interval'">Previous</button>
-                <span>{{ label }}</span>
-                <button @click="next" :disabled="displayType === 'All' || displayType === 'Interval'">Next</button>
-            </div>
-            <div class="mt-1rem" style="font-size: 1.1rem;">{{ balanceLabel }}: {{ formatAmount(accountBalance) }}</div>
-            <div class="mt-0_5rem" v-if="selectedTagId !== ''">Matching transactions: {{ filteredTransactions.length }}</div>
-            <div class="mt-1rem">
-                <details open class="mt-1rem" v-for="transactionHead in transactionHeads" :key="transactionHead.type + '-' + transactionHead.name">
-                    <summary style="font-size: 1.1rem;">{{ transactionHead.name }} ({{ transactionHead.transactions.length }}) | {{ formatAmount(transactionHead.transactions.reduce((acc, prev) => acc + prev.amountCents, 0)) }}</summary>
-                    <div class="mt-0_5rem transaction-list">
-                        <template v-if="transactionHead.type === 'carryOver'">
-                            <div v-for="carryOver in transactionHead.transactions" :key="carryOver.accountId" class="mt-0_5rem">
-                                <div v-if="accountId === ''">{{ carryOver.accountName }}</div>
-                                <div>🔃 <EasySelectionSpan>{{ formatAmount(carryOver.amountCents) }}</EasySelectionSpan></div>
+        <div class="app">
+            <header class="topbar">
+                <span class="logo">Mone<em>fy</em></span>
+                <div class="topbar-sep"></div>
+                <label class="topbar-check">
+                    <input type="checkbox" v-model="formatAmounts">
+                    Format amounts
+                </label>
+                <button class="theme-btn" type="button" :aria-pressed="String(theme === 'light')" @click="toggleTheme">
+                    {{ themeToggleLabel }}
+                </button>
+                <button class="btn-import" type="button" @click="showImportModal = true">↑ Import</button>
+            </header>
+
+            <aside class="sidebar">
+                <div class="period-block">
+                    <div class="period-nav">
+                        <button class="period-btn" type="button" :disabled="navigationDisabled" @click="previous">‹</button>
+                        <span class="period-name">{{ label }}</span>
+                        <button class="period-btn" type="button" :disabled="navigationDisabled" @click="next">›</button>
+                    </div>
+                </div>
+
+                <div class="s-divider"></div>
+
+                <div class="balance-block">
+                    <div class="balance-micro">{{ balanceLabel }}</div>
+                    <div class="balance-num" :class="{ neg: accountBalance < 0 }">{{ formatAmount(accountBalance) }}</div>
+                </div>
+
+                <div class="s-divider"></div>
+
+                <div class="s-ctrl">
+                    <div class="s-label">Account</div>
+                    <select class="s-select" v-model="accountId">
+                        <option value="">All accounts</option>
+                        <option v-for="account in accounts" :key="account._id" :value="account._id">{{ account.title }}</option>
+                    </select>
+                </div>
+
+                <div class="s-ctrl">
+                    <div class="s-label">Tag filter</div>
+                    <select class="s-select" v-model="selectedTagId">
+                        <option value="">All</option>
+                        <option value="tagged">All with tags</option>
+                        <option v-for="tag in tags" :key="tag.id" :value="String(tag.id)">{{ tag.name }} ({{ tag.transactionCount }})</option>
+                    </select>
+                </div>
+
+                <div class="s-ctrl">
+                    <div class="s-label">Period</div>
+                    <select class="s-select" v-model="displayType">
+                        <option v-for="option in displayTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+
+                    <div class="period-extra" :class="{ show: displayType === 'Choose Date' }">
+                        <div class="period-extra-grid">
+                            <div>
+                                <div class="period-field-label">Selected date</div>
+                                <input class="period-date-input" type="date" v-model="dateFromComp" @change="dateToComp = $event.target.value; generateFilteredTransfersAndTransactions()">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="period-extra" :class="{ show: displayType === 'Interval' }">
+                        <div class="period-extra-grid">
+                            <div>
+                                <div class="period-field-label">From</div>
+                                <input class="period-date-input" type="date" v-model="dateFromComp" @change="generateFilteredTransfersAndTransactions()">
+                            </div>
+                            <div>
+                                <div class="period-field-label">To</div>
+                                <input class="period-date-input" type="date" v-model="dateToComp" @change="generateFilteredTransfersAndTransactions()">
+                            </div>
+                        </div>
+                        <div class="period-extra-hint">Transactions within the selected range are shown.</div>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="main">
+                <section class="main-meta" :class="{ show: selectedTagId !== '' }">
+                    <div class="main-meta-line">
+                        <template v-if="selectedTagId === 'tagged'">Showing only tagged transactions.</template>
+                        <template v-else>Showing only transactions tagged <strong>{{ selectedTagName }}</strong>.</template>
+                    </div>
+                    <div class="main-meta-count">Matching transactions: <span>{{ matchingEntryCount }}</span></div>
+                </section>
+
+                <section v-if="transactionHeads.length === 0" class="empty-state">
+                    No transactions match the current filters.
+                </section>
+
+                <details open class="cat-section" v-for="head in transactionHeads" :key="head.type + '-' + head.name">
+                    <summary>
+                        <span class="cat-indicator" :class="headTone(head)"></span>
+                        <span class="cat-name">{{ head.name }}</span>
+                        <span class="cat-count">{{ head.transactions.length }}</span>
+                        <span class="cat-rule"></span>
+                        <span class="cat-total" :class="headTone(head)">
+                            <EasySelectionSpan>{{ formatAmount(getHeadTotal(head)) }}</EasySelectionSpan>
+                        </span>
+                        <span class="cat-chev">▶</span>
+                    </summary>
+
+                    <div class="txn-rows">
+                        <template v-if="head.type === 'carryOver'">
+                            <div v-for="carryOver in head.transactions" :key="carryOver.accountId" class="txn-row">
+                                <span class="txn-date"></span>
+                                <div class="txn-amt-cell">
+                                    <span class="txn-dot carryover"></span>
+                                    <span class="txn-amt carryover"><EasySelectionSpan>{{ formatAmount(carryOver.amountCents) }}</EasySelectionSpan></span>
+                                </div>
+                                <div class="txn-body">
+                                    <div class="txn-note">{{ carryOver.accountName }}</div>
+                                </div>
+                                <span class="txn-acct-col"></span>
                             </div>
                         </template>
-                        <template v-if="transactionHead.type === 'transfer'">
-                            <div v-for="transfer in transactionHead.transactions" :key="transfer.createdOn + '-' + transfer.accountFromId + '-' + transfer.accountToId + '-' + transfer.amountCents" class="mt-0_5rem transaction-card">
-                                <div v-if="displayType !== 'Date' && displayType !== 'Choose Date'">{{ formatDate(transfer.createdOn) }}</div>
-                                <div><template v-if="accountId === '' || transfer.accountFromId === accountId">🔴</template><template v-else>🟢</template> <EasySelectionSpan>{{ formatAmount(transfer.amountCents) }}</EasySelectionSpan> <EasySelectionSpan>{{ transfer.note }}</EasySelectionSpan></div>
-                                <div class="tag-section">
-                                    <div class="tag-composer">
-                                        <button
-                                            v-for="tag in transfer.tags"
-                                            :key="tag.id"
-                                            type="button"
-                                            class="tag-chip tag-chip-remove"
-                                            :disabled="isSavingTags(transfer.itemKey)"
-                                            @click="removeTagFromItem(transfer, tag.id)"
-                                        >
-                                            {{ tag.name }} ×
-                                        </button>
-                                        <div class="tag-input-area">
-                                            <input
-                                                type="text"
-                                                class="tag-inline-input"
-                                                placeholder="Type a tag to add or create"
-                                                :ref="element => setTagInputRef(transfer.itemKey, element)"
-                                                v-model="tagDrafts[transfer.itemKey]"
-                                                :disabled="isSavingTags(transfer.itemKey)"
-                                                @keydown.enter.prevent="submitTagDraft(transfer)"
-                                                @keydown.tab.prevent="acceptFirstSuggestion(transfer)"
+
+                        <template v-else>
+                            <div v-for="item in head.transactions" :key="item.itemKey" class="txn-row">
+                                <span class="txn-date">{{ formatRowDate(item.createdOn) }}</span>
+                                <div class="txn-amt-cell">
+                                    <span class="txn-dot" :class="rowTone(head, item)"></span>
+                                    <span class="txn-amt" :class="rowTone(head, item)">
+                                        <EasySelectionSpan>{{ formatAmount(item.amountCents) }}</EasySelectionSpan>
+                                    </span>
+                                </div>
+                                <div class="txn-body">
+                                    <div v-if="shouldShowRowNote(item, head)" class="txn-note" :class="{ 'txn-note-muted': !item.note }">
+                                        <EasySelectionSpan>{{ item.note || fallbackNote(head) }}</EasySelectionSpan>
+                                    </div>
+
+                                    <div class="txn-tags" :class="{ 'txn-tags-tight': !shouldShowRowNote(item, head) }">
+                                        <div class="tag-composer">
+                                            <button
+                                                v-for="tag in item.tags"
+                                                :key="tag.id"
+                                                type="button"
+                                                class="tag-chip tag-chip-remove"
+                                                :disabled="isSavingTags(item.itemKey)"
+                                                @click="removeTagFromItem(item, tag.id)"
                                             >
-                                            <template v-for="tagSuggestions in [filteredTagSuggestions(transfer)]" :key="'s'">
-                                                <div v-if="tagSuggestions.length > 0" class="tag-suggestions">
-                                                    <button
-                                                        v-for="tag in tagSuggestions"
-                                                        :key="tag.id"
-                                                        type="button"
-                                                        class="tag-suggestion"
-                                                        :disabled="isSavingTags(transfer.itemKey)"
-                                                        @mousedown.prevent="selectTagSuggestion(transfer, tag)"
-                                                    >
-                                                        {{ tag.name }}
-                                                    </button>
-                                                </div>
-                                                <div v-else-if="showCreateTagHint(transfer)" class="tag-editor-hint">
-                                                    Press Enter to create "{{ normalizeTagDraft(transfer.itemKey) }}"
-                                                </div>
-                                            </template>
+                                                {{ tag.name }} ×
+                                            </button>
+
+                                            <div class="tag-input-area">
+                                                <input
+                                                    type="text"
+                                                    class="tag-inline-input"
+                                                    placeholder="Add tag"
+                                                    :ref="element => setTagInputRef(item.itemKey, element)"
+                                                    v-model="tagDrafts[item.itemKey]"
+                                                    :disabled="isSavingTags(item.itemKey)"
+                                                    @keydown.enter.prevent="submitTagDraft(item)"
+                                                    @keydown.tab.prevent="acceptFirstSuggestion(item)"
+                                                >
+
+                                                <template v-for="tagSuggestions in [filteredTagSuggestions(item)]" :key="'suggestions'">
+                                                    <div v-if="tagSuggestions.length > 0" class="tag-suggestions">
+                                                        <button
+                                                            v-for="tag in tagSuggestions"
+                                                            :key="tag.id"
+                                                            type="button"
+                                                            class="tag-suggestion"
+                                                            :disabled="isSavingTags(item.itemKey)"
+                                                            @mousedown.prevent="selectTagSuggestion(item, tag)"
+                                                        >
+                                                            {{ tag.name }}
+                                                        </button>
+                                                    </div>
+                                                    <div v-else-if="showCreateTagHint(item)" class="tag-editor-hint">
+                                                        Press Enter to create "{{ normalizeTagDraft(item.itemKey) }}"
+                                                    </div>
+                                                </template>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        </template>
-                        <template v-if="transactionHead.type === 'transaction'">
-                            <div v-for="transaction in transactionHead.transactions" :key="transaction.transactionId" class="mt-0_5rem transaction-card">
-                                <div v-if="displayType !== 'Date' && displayType !== 'Choose Date'">{{ formatDate(transaction.createdOn) }}</div>
-                                <div v-if="accountId === ''">{{ transaction.accountName }}</div>
-                                <div><template v-if="transaction.categoryType === 'Income'">🟢</template><template v-else>🔴</template> <EasySelectionSpan>{{ formatAmount(transaction.amountCents) }}</EasySelectionSpan> <EasySelectionSpan>{{ transaction.note }}</EasySelectionSpan></div>
-                                <div class="tag-section">
-                                    <div class="tag-composer">
-                                        <button
-                                            v-for="tag in transaction.tags"
-                                            :key="tag.id"
-                                            type="button"
-                                            class="tag-chip tag-chip-remove"
-                                            :disabled="isSavingTags(transaction.itemKey)"
-                                            @click="removeTagFromItem(transaction, tag.id)"
-                                        >
-                                            {{ tag.name }} ×
-                                        </button>
-                                        <div class="tag-input-area">
-                                            <input
-                                                type="text"
-                                                class="tag-inline-input"
-                                                placeholder="Type a tag to add or create"
-                                                :ref="element => setTagInputRef(transaction.itemKey, element)"
-                                                v-model="tagDrafts[transaction.itemKey]"
-                                                :disabled="isSavingTags(transaction.itemKey)"
-                                                @keydown.enter.prevent="submitTagDraft(transaction)"
-                                                @keydown.tab.prevent="acceptFirstSuggestion(transaction)"
-                                            >
-                                            <template v-for="tagSuggestions in [filteredTagSuggestions(transaction)]" :key="'s'">
-                                                <div v-if="tagSuggestions.length > 0" class="tag-suggestions">
-                                                    <button
-                                                        v-for="tag in tagSuggestions"
-                                                        :key="tag.id"
-                                                        type="button"
-                                                        class="tag-suggestion"
-                                                        :disabled="isSavingTags(transaction.itemKey)"
-                                                        @mousedown.prevent="selectTagSuggestion(transaction, tag)"
-                                                    >
-                                                        {{ tag.name }}
-                                                    </button>
-                                                </div>
-                                                <div v-else-if="showCreateTagHint(transaction)" class="tag-editor-hint">
-                                                    Press Enter to create "{{ normalizeTagDraft(transaction.itemKey) }}"
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </div>
-                                </div>
+                                <span class="txn-acct-col">{{ rowAccountLabel(head, item) }}</span>
                             </div>
                         </template>
                     </div>
                 </details>
-            </div>
+            </main>
+
             <ImportModal :show="showImportModal" :formatAmounts="formatAmounts" @close="showImportModal = false" />
         </div>
     `,
     data() {
-        const defaultDateRange = getDefaultDateRange(DEFAULT_DISPLAY_TYPE)
+        const initialState = getInitialAppState()
         return {
             accounts: [],
             tags: [],
-            accountId: '',
-            selectedTagId: '',
-            displayType: DEFAULT_DISPLAY_TYPE,
-            dateFrom: defaultDateRange.dateFrom,
-            dateTo: defaultDateRange.dateTo,
-            formatAmounts: true,
+            accountId: initialState.accountId,
+            selectedTagId: initialState.selectedTagId,
+            displayType: initialState.displayType,
+            displayTypeOptions: DISPLAY_TYPE_OPTIONS,
+            dateFrom: initialState.dateFrom,
+            dateTo: initialState.dateTo,
+            formatAmounts: initialState.formatAmounts,
+            theme: initialState.theme,
             carryOver: [],
             transfers: [],
             transactions: [],
@@ -233,16 +311,44 @@ createApp({
         }
     },
     computed: {
-        balanceLabel() { return this.selectedTagId === '' ? 'Balance' : 'Visible Total' },
-        label() { return this.displayType === 'Day' || this.displayType === 'Choose Date' ? formatDate(this.dateFrom) : formatDateRange(this.dateFrom, this.dateTo) },
-        selectedTagName() { return this.tags.find(tag => String(tag.id) === this.selectedTagId)?.name ?? '' },
+        balanceLabel() {
+            return this.selectedTagId === '' ? 'Balance' : 'Visible Total'
+        },
+        label() {
+            if ((this.displayType === 'All' || this.displayType === 'Interval') && (this.dateFrom === '' || this.dateTo === '')) {
+                return this.displayType === 'All' ? 'All time' : 'Choose a range'
+            }
+            return this.displayType === 'Day' || this.displayType === 'Choose Date'
+                ? formatDate(this.dateFrom)
+                : formatDateRange(this.dateFrom, this.dateTo)
+        },
+        matchingEntryCount() {
+            return this.filteredTransactions.length + this.filteredTransfers.length
+        },
+        navigationDisabled() {
+            return this.displayType === 'All' || this.displayType === 'Interval'
+        },
+        selectedTagName() {
+            return this.tags.find(tag => String(tag.id) === this.selectedTagId)?.name ?? ''
+        },
+        themeToggleLabel() {
+            return this.theme === 'light' ? '☀ Light mode (on)' : '☾ Dark mode (on)'
+        },
         dateFromComp: {
-            get() { return dayjs(this.dateFrom).format('YYYY-MM-DD') },
-            set(value) { this.dateFrom = getLocalEpoch(value, 'start') }
+            get() {
+                return dayjs(this.dateFrom).format('YYYY-MM-DD')
+            },
+            set(value) {
+                this.dateFrom = getLocalEpoch(value, 'start')
+            }
         },
         dateToComp: {
-            get() { return dayjs(this.dateTo).format('YYYY-MM-DD') },
-            set(value) { this.dateTo = getLocalEpoch(value, 'end') }
+            get() {
+                return dayjs(this.dateTo).format('YYYY-MM-DD')
+            },
+            set(value) {
+                this.dateTo = getLocalEpoch(value, 'end')
+            }
         },
     },
     watch: {
@@ -255,17 +361,27 @@ createApp({
             this.syncFiltersToUrl()
         },
         displayType() {
-            const defaultDateRange = this.displayType === 'Interval' || this.displayType === 'Choose Date'
+            const nextDateRange = this.displayType === 'Interval' || this.displayType === 'Choose Date'
                 ? { dateFrom: this.dateFrom, dateTo: this.dateTo }
                 : getDefaultDateRange(this.displayType)
-            this.dateFrom = defaultDateRange.dateFrom
-            this.dateTo = defaultDateRange.dateTo
+            this.dateFrom = nextDateRange.dateFrom
+            this.dateTo = nextDateRange.dateTo
             this.generateFilteredTransfersAndTransactions()
             this.syncFiltersToUrl()
         },
-        dateFrom() { this.syncFiltersToUrl() },
-        dateTo() { this.syncFiltersToUrl() },
-        formatAmounts() { localStorage.setItem('MonefyViewer-formatAmounts', this.formatAmounts ? 'true' : 'false') },
+        dateFrom() {
+            this.syncFiltersToUrl()
+        },
+        dateTo() {
+            this.syncFiltersToUrl()
+        },
+        formatAmounts() {
+            localStorage.setItem(FORMAT_AMOUNT_STORAGE_KEY, this.formatAmounts ? 'true' : 'false')
+        },
+        theme() {
+            localStorage.setItem(THEME_STORAGE_KEY, this.theme)
+            this.applyTheme(true)
+        },
     },
     methods: {
         async fetchAccounts() {
@@ -285,22 +401,22 @@ createApp({
         async fetchTransactions() {
             const response = await fetch('/transactions')
             const data = await response.json()
-            this.transactions = data.map(t => ({
-                ...t,
+            this.transactions = data.map(transaction => ({
+                ...transaction,
                 itemType: 'transaction',
-                itemId: t.transactionId,
-                itemKey: `transaction:${t.transactionId}`
+                itemId: transaction.transactionId,
+                itemKey: `transaction:${transaction.transactionId}`
             }))
             this.ensureTagEditorState()
         },
         async fetchTransfers() {
             const response = await fetch('/transfers')
             const data = await response.json()
-            this.transfers = data.map(t => ({
-                ...t,
+            this.transfers = data.map(transfer => ({
+                ...transfer,
                 itemType: 'transfer',
-                itemId: t.transferId,
-                itemKey: `transfer:${t.transferId}`
+                itemId: transfer.transferId,
+                itemKey: `transfer:${transfer.transferId}`
             }))
             this.ensureTagEditorState()
         },
@@ -331,6 +447,56 @@ createApp({
             }
 
             window.history.replaceState({}, '', url)
+        },
+        applyTheme(withTransition = false) {
+            const root = document.documentElement
+            if (withTransition) {
+                root.classList.add('theme-switching')
+            }
+
+            root.classList.toggle('light', this.theme === 'light')
+
+            if (!withTransition) return
+
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    root.classList.remove('theme-switching')
+                })
+            })
+        },
+        toggleTheme() {
+            this.theme = this.theme === 'light' ? 'dark' : 'light'
+        },
+        headTone(head) {
+            if (head.type === 'carryOver') return 'carryover'
+            if (head.type === 'transfer') return 'transfer'
+            return head.categoryType === 'Income' ? 'income' : 'expense'
+        },
+        rowTone(head, item) {
+            if (head.type !== 'transfer' || this.accountId === '') {
+                return this.headTone(head)
+            }
+
+            return item.accountFromId === this.accountId ? 'expense' : 'income'
+        },
+        fallbackNote(head) {
+            return 'No note'
+        },
+        shouldShowRowNote(item, head) {
+            return head.type !== 'transfer' || Boolean(item.note)
+        },
+        rowAccountLabel(head, item) {
+            if (head.type === 'transaction' && this.accountId === '') return item.accountName
+            if (head.type === 'transfer' && this.accountId !== '') {
+                return item.accountFromId === this.accountId ? item.accountToName : item.accountFromName
+            }
+            return ''
+        },
+        formatRowDate(date) {
+            return dayjs(date).format('MMM DD')
+        },
+        getHeadTotal(head) {
+            return head.transactions.reduce((total, item) => total + item.amountCents, 0)
         },
         setTagInputRef(itemKey, element) {
             if (element) {
@@ -371,6 +537,7 @@ createApp({
             next.add(item.itemKey)
             this.savingItemIds = next
             let succeeded = false
+
             try {
                 const response = await fetch(`/${item.itemType}s/${encodeURIComponent(item.itemId)}/tags`, {
                     method: 'PUT',
@@ -389,6 +556,7 @@ createApp({
                 remaining.delete(item.itemKey)
                 this.savingItemIds = remaining
             }
+
             if (succeeded) await this.fetchTags()
         },
         availableTagsForItem(item) {
@@ -400,8 +568,7 @@ createApp({
         },
         findAvailableTagByName(item, name) {
             const normalizedName = `${name}`.replace(/\s+/g, ' ').trim().toLowerCase()
-            return this.availableTagsForItem(item)
-                .find(tag => tag.name.toLowerCase() === normalizedName)
+            return this.availableTagsForItem(item).find(tag => tag.name.toLowerCase() === normalizedName)
         },
         filteredTagSuggestions(item) {
             const draft = this.normalizeTagDraft(item.itemKey).toLowerCase()
@@ -437,10 +604,11 @@ createApp({
         async submitTagDraft(item) {
             const tagName = this.normalizeTagDraft(item.itemKey)
             if (!tagName) return
+
             try {
                 const existingTag = this.findAvailableTagByName(item, tagName)
                 const tag = existingTag ?? await this.createTag(tagName)
-                const nextTagIds = [...new Set([...item.tags.map(t => t.id), tag.id])]
+                const nextTagIds = [...new Set([...item.tags.map(existing => existing.id), tag.id])]
                 await this.saveItemTags(item, nextTagIds)
                 this.tagDrafts[item.itemKey] = ''
                 this.focusTagInput(item.itemKey)
@@ -506,40 +674,40 @@ createApp({
             this.transactionHeads = []
             this.accountBalance = 0
 
-            let carryOver = {}
-            let transfers = []
-
-            let accountTransfers = this.accountId === ''
+            const carryOver = {}
+            const accountTransfers = this.accountId === ''
                 ? this.transfers
                 : this.transfers.filter(transfer => transfer.accountFromId === this.accountId || transfer.accountToId === this.accountId)
 
             if (!isTagFiltered && this.displayType !== 'All') {
-                accountTransfers.filter(transfer => transfer.createdOn < this.dateFrom).forEach(transfer => {
-                    const accountFrom = this.accounts.find(account => account._id === transfer.accountFromId)
-                    const accountTo = this.accounts.find(account => account._id === transfer.accountToId)
-                    let includeFrom = 1
-                    let includeTo = 1
+                accountTransfers
+                    .filter(transfer => transfer.createdOn < this.dateFrom)
+                    .forEach(transfer => {
+                        const accountFrom = this.accounts.find(account => account._id === transfer.accountFromId)
+                        const accountTo = this.accounts.find(account => account._id === transfer.accountToId)
+                        let includeFrom = 1
+                        let includeTo = 1
 
-                    if (this.accountId === '') {
-                        includeFrom = accountFrom.isIncludedInTotalBalance
-                        includeTo = accountTo.isIncludedInTotalBalance
-                    } else {
-                        if (transfer.accountFromId !== this.accountId) includeFrom = 0
-                        if (transfer.accountToId !== this.accountId) includeTo = 0
-                    }
+                        if (this.accountId === '') {
+                            includeFrom = accountFrom?.isIncludedInTotalBalance ?? 1
+                            includeTo = accountTo?.isIncludedInTotalBalance ?? 1
+                        } else {
+                            if (transfer.accountFromId !== this.accountId) includeFrom = 0
+                            if (transfer.accountToId !== this.accountId) includeTo = 0
+                        }
 
-                    if (includeFrom === 1) {
-                        if (carryOver[transfer.accountFromId] === undefined) carryOver[transfer.accountFromId] = 0
-                        carryOver[transfer.accountFromId] -= transfer.amountCents
-                    }
-                    if (includeTo === 1) {
-                        if (carryOver[transfer.accountToId] === undefined) carryOver[transfer.accountToId] = 0
-                        carryOver[transfer.accountToId] += transfer.amountCents
-                    }
-                })
+                        if (includeFrom === 1) {
+                            if (carryOver[transfer.accountFromId] === undefined) carryOver[transfer.accountFromId] = 0
+                            carryOver[transfer.accountFromId] -= transfer.amountCents
+                        }
+                        if (includeTo === 1) {
+                            if (carryOver[transfer.accountToId] === undefined) carryOver[transfer.accountToId] = 0
+                            carryOver[transfer.accountToId] += transfer.amountCents
+                        }
+                    })
             }
 
-            transfers = this.displayType !== 'All'
+            let transfers = this.displayType !== 'All'
                 ? accountTransfers.filter(transfer => transfer.createdOn >= this.dateFrom && transfer.createdOn <= this.dateTo)
                 : accountTransfers
 
@@ -557,13 +725,15 @@ createApp({
 
             if (this.displayType !== 'All') {
                 if (!isTagFiltered) {
-                    transactions.filter(transaction => transaction.createdOn < this.dateFrom).forEach(transaction => {
-                        if (carryOver[transaction.accountId] === undefined) {
-                            carryOver[transaction.accountId] = 0
-                        }
-                        if (transaction.categoryType === 'Income') carryOver[transaction.accountId] += transaction.amountCents
-                        if (transaction.categoryType === 'Expense') carryOver[transaction.accountId] -= transaction.amountCents
-                    })
+                    transactions
+                        .filter(transaction => transaction.createdOn < this.dateFrom)
+                        .forEach(transaction => {
+                            if (carryOver[transaction.accountId] === undefined) {
+                                carryOver[transaction.accountId] = 0
+                            }
+                            if (transaction.categoryType === 'Income') carryOver[transaction.accountId] += transaction.amountCents
+                            if (transaction.categoryType === 'Expense') carryOver[transaction.accountId] -= transaction.amountCents
+                        })
                 }
 
                 transactions = transactions.filter(transaction => transaction.createdOn >= this.dateFrom && transaction.createdOn <= this.dateTo)
@@ -574,10 +744,16 @@ createApp({
                     ? transaction.tags.length > 0
                     : transaction.tags.some(tag => String(tag.id) === this.selectedTagId))
             } else {
-                this.carryOver = Object.keys(carryOver).map(accountId => {
-                    const account = this.accounts.find(item => item._id === accountId)
-                    return { accountId, accountName: account.title, amountCents: carryOver[accountId] }
-                }).filter(item => item.amountCents !== 0)
+                this.carryOver = Object.keys(carryOver)
+                    .map(accountId => {
+                        const account = this.accounts.find(item => item._id === accountId)
+                        return {
+                            accountId,
+                            accountName: account?.title ?? 'Unknown account',
+                            amountCents: carryOver[accountId]
+                        }
+                    })
+                    .filter(item => item.amountCents !== 0)
             }
 
             this.filteredTransactions = transactions
@@ -617,35 +793,33 @@ createApp({
                 }
             })
 
-            let accountBalance = 0
-            transactionHeads.forEach(transactionHead => {
-                transactionHead.transactions.forEach(transaction => {
-                    if (transactionHead.type === 'carryOver') accountBalance += transaction.amountCents
-                    if (transactionHead.type === 'transaction') {
-                        if (transaction.categoryType === 'Expense') accountBalance -= transaction.amountCents
-                        if (transaction.categoryType === 'Income') accountBalance += transaction.amountCents
-                    }
-                    if (transactionHead.type === 'transfer') {
-                        if (this.accountId !== '') {
-                            if (transaction.accountFromId === this.accountId) accountBalance -= transaction.amountCents
-                            if (transaction.accountToId === this.accountId) accountBalance += transaction.amountCents
-                        } else {
-                            if (transaction.accountFromIsIncludedInTotalBalance === 1 && transaction.accountToIsIncludedInTotalBalance === 1) return
-                            if (transaction.accountFromIsIncludedInTotalBalance === 0 && transaction.accountToIsIncludedInTotalBalance === 1) {
-                                accountBalance += transaction.amountCents
-                                return
-                            }
-                            accountBalance -= transaction.amountCents
-                        }
-                    }
-                })
-            })
+            let accountBalance = this.carryOver.reduce((total, item) => total + item.amountCents, 0)
+
+            for (const transaction of this.filteredTransactions) {
+                if (transaction.categoryType === 'Income') accountBalance += transaction.amountCents
+                if (transaction.categoryType === 'Expense') accountBalance -= transaction.amountCents
+            }
+
+            for (const transfer of this.filteredTransfers) {
+                if (this.accountId !== '') {
+                    if (transfer.accountFromId === this.accountId) accountBalance -= transfer.amountCents
+                    if (transfer.accountToId === this.accountId) accountBalance += transfer.amountCents
+                    continue
+                }
+
+                if (transfer.accountFromIsIncludedInTotalBalance === 1 && transfer.accountToIsIncludedInTotalBalance === 1) continue
+                if (transfer.accountFromIsIncludedInTotalBalance === 0 && transfer.accountToIsIncludedInTotalBalance === 1) {
+                    accountBalance += transfer.amountCents
+                    continue
+                }
+                accountBalance -= transfer.amountCents
+            }
 
             this.transactionHeads = transactionHeads
             this.accountBalance = accountBalance
 
             if (this.displayType === 'All') {
-                const allDates = [...this.transfers.map(transfer => transfer.createdOn), ...this.transactions.map(transaction => transaction.createdOn)]
+                const allDates = [...accountTransfers.map(transfer => transfer.createdOn), ...transactions.map(transaction => transaction.createdOn)]
                 if (allDates.length > 0) {
                     this.dateFrom = Math.min(...allDates)
                     this.dateTo = Math.max(...allDates)
@@ -655,39 +829,8 @@ createApp({
         formatDate,
     },
     async created() {
-        this.formatAmounts = localStorage.getItem('MonefyViewer-formatAmounts') === 'false' ? false : true
-        const url = new URL(window.location.href)
-        const accountId = url.searchParams.get('account_id')
-        const selectedTagId = url.searchParams.get('tag_id')
-        const displayType = url.searchParams.get('display_type')
-        const dateFrom = url.searchParams.get('date_from')
-        const dateTo = url.searchParams.get('date_to')
+        this.applyTheme(false)
 
-        if (accountId !== null) {
-            this.accountId = accountId
-        }
-
-        if (selectedTagId !== null) {
-            this.selectedTagId = selectedTagId
-        }
-
-        if (displayType !== null && DISPLAY_TYPES.has(displayType)) {
-            this.displayType = displayType
-        }
-
-        if (dateFrom !== null) {
-            const parsedDateFrom = dayjs(dateFrom.replaceAll('_', ':'))
-            if (parsedDateFrom.isValid()) {
-                this.dateFrom = parsedDateFrom.valueOf()
-            }
-        }
-
-        if (dateTo !== null) {
-            const parsedDateTo = dayjs(dateTo.replaceAll('_', ':'))
-            if (parsedDateTo.isValid()) {
-                this.dateTo = parsedDateTo.valueOf()
-            }
-        }
         await Promise.all([this.fetchAccounts(), this.fetchTags(), this.fetchTransactions(), this.fetchTransfers()])
         this.generateFilteredTransfersAndTransactions()
         this.syncFiltersToUrl()
