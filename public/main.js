@@ -113,7 +113,7 @@ createApp({
                     <div class="period-nav">
                         <button class="period-btn" type="button" :disabled="navigationDisabled" @click="previous">‹</button>
                         <span class="period-name">{{ label }}</span>
-                        <button class="period-btn" type="button" :disabled="navigationDisabled" @click="next">›</button>
+                        <button class="period-btn" type="button" :disabled="nextNavigationDisabled" @click="next">›</button>
                     </div>
                 </div>
 
@@ -327,6 +327,26 @@ createApp({
         },
         navigationDisabled() {
             return this.displayType === 'All' || this.displayType === 'Interval'
+        },
+        nextNavigationDisabled() {
+            if (this.navigationDisabled) return true
+            if (this.displayType === 'Day' || this.displayType === 'Choose Date') {
+                return dayjs(this.dateFrom).startOf('day').valueOf() >= dayjs().startOf('day').valueOf()
+            }
+
+            if (this.displayType === 'Week') {
+                return dayjs(this.dateFrom).startOf('day').valueOf() >= dayjs().startOf('week').add(1, 'day').startOf('day').valueOf()
+            }
+
+            if (this.displayType === 'Month') {
+                return dayjs(this.dateFrom).startOf('month').valueOf() >= dayjs().startOf('month').valueOf()
+            }
+
+            if (this.displayType === 'Year') {
+                return dayjs(this.dateFrom).startOf('year').valueOf() >= dayjs().startOf('year').valueOf()
+            }
+
+            return false
         },
         selectedTagName() {
             return this.tags.find(tag => String(tag.id) === this.selectedTagId)?.name ?? ''
@@ -643,6 +663,8 @@ createApp({
             this.generateFilteredTransfersAndTransactions()
         },
         next() {
+            if (this.nextNavigationDisabled) return
+
             if (this.displayType === 'Day' || this.displayType === 'Choose Date') {
                 const date = dayjs(this.dateFrom).add(1, 'day')
                 this.dateFrom = getLocalEpoch(date, 'start')
