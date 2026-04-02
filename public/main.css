@@ -29,6 +29,7 @@
     --accent: #7c6ff7;
     --accent-dim: rgba(124, 111, 247, 0.14);
     --accent-str: rgba(124, 111, 247, 0.3);
+    --search-highlight-bg: rgba(124, 111, 247, 0.5);
 
     --income: #00cc7e;
     --income-dim: rgba(0, 204, 126, 0.1);
@@ -77,6 +78,7 @@ html.light {
     --accent: #5b4de0;
     --accent-dim: rgba(91, 77, 224, 0.1);
     --accent-str: rgba(91, 77, 224, 0.22);
+    --search-highlight-bg: rgba(91, 77, 224, 0.22);
 
     --income: #007a48;
     --income-dim: rgba(0, 122, 72, 0.08);
@@ -346,6 +348,7 @@ select:disabled {
 }
 
 .s-select,
+.s-input,
 .period-date-input,
 .modal-file {
     width: 100%;
@@ -365,13 +368,20 @@ select:disabled {
     background-position: right 8px center;
 }
 
+.s-input {
+    padding: 6px 8px;
+    font-size: 0.78rem;
+}
+
 .s-select:hover,
+.s-input:hover,
 .period-date-input:hover,
 .modal-file:hover {
     border-color: var(--border-md);
 }
 
 .s-select:focus,
+.s-input:focus,
 .period-date-input:focus,
 .modal-file:focus {
     border-color: var(--accent);
@@ -573,7 +583,7 @@ select:disabled {
 
 .txn-row {
     display: grid;
-    grid-template-columns: 52px 104px 1fr auto;
+    grid-template-columns: 76px 104px 1fr auto;
     gap: 0 14px;
     align-items: start;
     padding-block: 9px;
@@ -654,6 +664,19 @@ select:disabled {
     color: var(--text);
     font-size: 0.8rem;
     line-height: 1.4;
+}
+
+.search-highlight {
+    padding: 0 0.04rem;
+    border-radius: 0.16rem;
+    background: linear-gradient(
+        180deg,
+        transparent 0 24%,
+        var(--search-highlight-bg) 24% 92%,
+        transparent 92% 100%
+    );
+    color: inherit;
+    font-weight: inherit;
 }
 
 .txn-note-muted {

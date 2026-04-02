@@ -72,6 +72,7 @@ function getInitialAppState() {
     return {
         accountId: url.searchParams.get('account_id') ?? '',
         selectedTagId: url.searchParams.get('tag_id') ?? '',
+        searchQuery: url.searchParams.get('search') ?? '',
         displayType,
         dateFrom: parsedDateFrom ?? fallbackDateRange.dateFrom,
         dateTo: parsedDateTo ?? fallbackDateRange.dateTo,
@@ -139,13 +140,25 @@ createApp({
                     <select class="s-select" v-model="selectedTagId">
                         <option value="">All</option>
                         <option value="tagged">All with tags</option>
+                        <option value="untagged">All without tags</option>
                         <option v-for="tag in tags" :key="tag.id" :value="String(tag.id)">{{ tag.name }} ({{ tag.transactionCount }})</option>
                     </select>
                 </div>
 
                 <div class="s-ctrl">
+                    <div class="s-label">Search</div>
+                    <input
+                        v-model="searchQuery"
+                        type="search"
+                        class="s-input"
+                        placeholder="Note or amount"
+                        spellcheck="false"
+                    >
+                </div>
+
+                <div class="s-ctrl">
                     <div class="s-label">Period</div>
-                    <select class="s-select" v-model="displayType">
+                    <select class="s-select" v-model="displayType" :disabled="hasActivePeriodOverride">
                         <option v-for="option in displayTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
                     </select>
 
@@ -153,7 +166,7 @@ createApp({
                         <div class="period-extra-grid">
                             <div>
                                 <div class="period-field-label">Selected date</div>
-                                <input class="period-date-input" type="date" v-model="dateFromComp" @change="dateToComp = $event.target.value; generateFilteredTransfersAndTransactions()">
+                                <input class="period-date-input" type="date" v-model="dateFromComp" :disabled="hasActivePeriodOverride" @change="dateToComp = $event.target.value; generateFilteredTransfersAndTransactions()">
                             </div>
                         </div>
                     </div>
@@ -162,11 +175,11 @@ createApp({
                         <div class="period-extra-grid">
                             <div>
                                 <div class="period-field-label">From</div>
-                                <input class="period-date-input" type="date" v-model="dateFromComp" @change="generateFilteredTransfersAndTransactions()">
+                                <input class="period-date-input" type="date" v-model="dateFromComp" :disabled="hasActivePeriodOverride" @change="generateFilteredTransfersAndTransactions()">
                             </div>
                             <div>
                                 <div class="period-field-label">To</div>
-                                <input class="period-date-input" type="date" v-model="dateToComp" @change="generateFilteredTransfersAndTransactions()">
+                                <input class="period-date-input" type="date" v-model="dateToComp" :disabled="hasActivePeriodOverride" @change="generateFilteredTransfersAndTransactions()">
                             </div>
                         </div>
                         <div class="period-extra-hint">Transactions within the selected range are shown.</div>
@@ -175,110 +188,125 @@ createApp({
             </aside>
 
             <main class="main">
-                <section class="main-meta" :class="{ show: selectedTagId !== '' }">
+                <section class="main-meta" :class="{ show: hasActiveSummary }">
                     <div class="main-meta-line">
-                        <template v-if="selectedTagId === 'tagged'">Showing only tagged transactions.</template>
-                        <template v-else>Showing only transactions tagged <strong>{{ selectedTagName }}</strong>.</template>
-                    </div>
-                    <div class="main-meta-count">Matching transactions: <span>{{ matchingEntryCount }}</span></div>
-                </section>
-
-                <section v-if="transactionHeads.length === 0" class="empty-state">
-                    No transactions match the current filters.
-                </section>
-
-                <details open class="cat-section" v-for="head in transactionHeads" :key="head.type + '-' + head.name">
-                    <summary>
-                        <span class="cat-indicator" :class="headTone(head)"></span>
-                        <span class="cat-name">{{ head.name }}</span>
-                        <span class="cat-count">{{ head.transactions.length }}</span>
-                        <span class="cat-rule"></span>
-                        <span class="cat-total" :class="headTone(head)">
-                            <EasySelectionSpan>{{ formatAmount(getHeadTotal(head)) }}</EasySelectionSpan>
-                        </span>
-                        <span class="cat-chev">▶</span>
-                    </summary>
-
-                    <div class="txn-rows">
-                        <template v-if="head.type === 'carryOver'">
-                            <div v-for="carryOver in head.transactions" :key="carryOver.accountId" class="txn-row">
-                                <span class="txn-date"></span>
-                                <div class="txn-amt-cell">
-                                    <span class="txn-dot carryover"></span>
-                                    <span class="txn-amt carryover"><EasySelectionSpan>{{ formatAmount(carryOver.amountCents) }}</EasySelectionSpan></span>
-                                </div>
-                                <div class="txn-body">
-                                    <div class="txn-note">{{ carryOver.accountName }}</div>
-                                </div>
-                                <span class="txn-acct-col"></span>
-                            </div>
+                        <template v-if="hasActiveSearch">
+                            Showing results for <strong>{{ normalizedSearchQuery }}</strong>
+                            <template v-if="selectedTagId === 'tagged'"> with tags.</template>
+                            <template v-else-if="selectedTagId === 'untagged'"> without tags.</template>
+                            <template v-else-if="selectedTagId !== ''"> tagged <strong>{{ selectedTagName }}</strong>.</template>
+                            <template v-else>.</template>
                         </template>
+                        <template v-else-if="selectedTagId === 'tagged'">Showing only tagged entries.</template>
+                        <template v-else-if="selectedTagId === 'untagged'">Showing only untagged entries.</template>
+                        <template v-else>Showing only entries tagged <strong>{{ selectedTagName }}</strong>.</template>
+                    </div>
+                    <div class="main-meta-count">Matching entries: <span>{{ matchingEntryCount }}</span></div>
+                </section>
 
-                        <template v-else>
-                            <div v-for="item in head.transactions" :key="item.itemKey" class="txn-row">
-                                <span class="txn-date">{{ formatRowDate(item.createdOn) }}</span>
-                                <div class="txn-amt-cell">
-                                    <span class="txn-dot" :class="rowTone(head, item)"></span>
-                                    <span class="txn-amt" :class="rowTone(head, item)">
-                                        <EasySelectionSpan>{{ formatAmount(item.amountCents) }}</EasySelectionSpan>
-                                    </span>
-                                </div>
-                                <div class="txn-body">
-                                    <div v-if="shouldShowRowNote(item, head)" class="txn-note" :class="{ 'txn-note-muted': !item.note }">
-                                        <EasySelectionSpan>{{ item.note || fallbackNote(head) }}</EasySelectionSpan>
+                <section v-if="!hasVisibleHeads" class="empty-state">
+                    No transactions or transfers match the current filters.
+                </section>
+
+                <section v-else :key="resultsRenderKey" class="results-list">
+                    <details open class="cat-section" v-for="head in transactionHeads" :key="head.type + '-' + head.name + '-' + (head.categoryType ?? '')">
+                        <summary>
+                            <span class="cat-indicator" :class="headTone(head)"></span>
+                            <span class="cat-name">{{ head.name }}</span>
+                            <span class="cat-count">{{ head.transactions.length }}</span>
+                            <span class="cat-rule"></span>
+                            <span class="cat-total" :class="headTone(head)">
+                                <EasySelectionSpan>{{ formatAmount(getHeadTotal(head)) }}</EasySelectionSpan>
+                            </span>
+                            <span class="cat-chev">▶</span>
+                        </summary>
+
+                        <div class="txn-rows">
+                            <template v-if="head.type === 'carryOver'">
+                                <div v-for="carryOver in head.transactions" :key="carryOver.accountId" class="txn-row">
+                                    <span class="txn-date"></span>
+                                    <div class="txn-amt-cell">
+                                        <span class="txn-dot carryover"></span>
+                                        <span class="txn-amt carryover"><EasySelectionSpan>{{ formatAmount(carryOver.amountCents) }}</EasySelectionSpan></span>
                                     </div>
+                                    <div class="txn-body">
+                                        <div class="txn-note">{{ carryOver.accountName }}</div>
+                                    </div>
+                                    <span class="txn-acct-col"></span>
+                                </div>
+                            </template>
 
-                                    <div class="txn-tags" :class="{ 'txn-tags-tight': !shouldShowRowNote(item, head) }">
-                                        <div class="tag-composer">
-                                            <button
-                                                v-for="tag in item.tags"
-                                                :key="tag.id"
-                                                type="button"
-                                                class="tag-chip tag-chip-remove"
-                                                :disabled="isSavingTags(item.itemKey)"
-                                                @click="removeTagFromItem(item, tag.id)"
-                                            >
-                                                {{ tag.name }} ×
-                                            </button>
-
-                                            <div class="tag-input-area">
-                                                <input
-                                                    type="text"
-                                                    class="tag-inline-input"
-                                                    placeholder="Add tag"
-                                                    :ref="element => setTagInputRef(item.itemKey, element)"
-                                                    v-model="tagDrafts[item.itemKey]"
-                                                    :disabled="isSavingTags(item.itemKey)"
-                                                    @keydown.enter.prevent="submitTagDraft(item)"
-                                                    @keydown.tab.prevent="acceptFirstSuggestion(item)"
-                                                >
-
-                                                <template v-for="tagSuggestions in [filteredTagSuggestions(item)]" :key="'suggestions'">
-                                                    <div v-if="tagSuggestions.length > 0" class="tag-suggestions">
-                                                        <button
-                                                            v-for="tag in tagSuggestions"
-                                                            :key="tag.id"
-                                                            type="button"
-                                                            class="tag-suggestion"
-                                                            :disabled="isSavingTags(item.itemKey)"
-                                                            @mousedown.prevent="selectTagSuggestion(item, tag)"
-                                                        >
-                                                            {{ tag.name }}
-                                                        </button>
-                                                    </div>
-                                                    <div v-else-if="showCreateTagHint(item)" class="tag-editor-hint">
-                                                        Press Enter to create "{{ normalizeTagDraft(item.itemKey) }}"
-                                                    </div>
+                            <template v-else>
+                                <div v-for="item in head.transactions" :key="item.itemKey" class="txn-row">
+                                    <span class="txn-date">{{ formatRowDate(item.createdOn) }}</span>
+                                    <div class="txn-amt-cell">
+                                        <span class="txn-dot" :class="rowTone(head, item)"></span>
+                                        <span class="txn-amt" :class="rowTone(head, item)">
+                                            <EasySelectionSpan>{{ formatAmount(item.amountCents) }}</EasySelectionSpan>
+                                        </span>
+                                    </div>
+                                    <div class="txn-body">
+                                        <div v-if="shouldShowRowNote(item, head)" class="txn-note" :class="{ 'txn-note-muted': !item.note }">
+                                            <EasySelectionSpan>
+                                                <template v-for="(segment, segmentIndex) in getHighlightedNoteParts(item.note || fallbackNote(head), item.note)" :key="segmentIndex">
+                                                    <mark v-if="segment.isMatch" class="search-highlight">{{ segment.text }}</mark>
+                                                    <template v-else>{{ segment.text }}</template>
                                                 </template>
+                                            </EasySelectionSpan>
+                                        </div>
+
+                                        <div class="txn-tags" :class="{ 'txn-tags-tight': !shouldShowRowNote(item, head) }">
+                                            <div class="tag-composer">
+                                                <button
+                                                    v-for="tag in item.tags"
+                                                    :key="tag.id"
+                                                    type="button"
+                                                    class="tag-chip tag-chip-remove"
+                                                    :disabled="isSavingTags(item.itemKey)"
+                                                    @click="removeTagFromItem(item, tag.id)"
+                                                >
+                                                    {{ tag.name }} ×
+                                                </button>
+
+                                                <div class="tag-input-area">
+                                                    <input
+                                                        type="text"
+                                                        class="tag-inline-input"
+                                                        placeholder="Add tag"
+                                                        :ref="element => setTagInputRef(item.itemKey, element)"
+                                                        v-model="tagDrafts[item.itemKey]"
+                                                        :disabled="isSavingTags(item.itemKey)"
+                                                        @keydown.enter.prevent="submitTagDraft(item)"
+                                                        @keydown.tab.prevent="acceptFirstSuggestion(item)"
+                                                    >
+
+                                                    <template v-for="tagSuggestions in [filteredTagSuggestions(item)]" :key="'suggestions'">
+                                                        <div v-if="tagSuggestions.length > 0" class="tag-suggestions">
+                                                            <button
+                                                                v-for="tag in tagSuggestions"
+                                                                :key="tag.id"
+                                                                type="button"
+                                                                class="tag-suggestion"
+                                                                :disabled="isSavingTags(item.itemKey)"
+                                                                @mousedown.prevent="selectTagSuggestion(item, tag)"
+                                                            >
+                                                                {{ tag.name }}
+                                                            </button>
+                                                        </div>
+                                                        <div v-else-if="showCreateTagHint(item)" class="tag-editor-hint">
+                                                            Press Enter to create "{{ normalizeTagDraft(item.itemKey) }}"
+                                                        </div>
+                                                    </template>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
+                                    <span class="txn-acct-col">{{ rowAccountLabel(head, item) }}</span>
                                 </div>
-                                <span class="txn-acct-col">{{ rowAccountLabel(head, item) }}</span>
-                            </div>
-                        </template>
-                    </div>
-                </details>
+                            </template>
+                        </div>
+                    </details>
+                </section>
             </main>
 
             <ImportModal :show="showImportModal" :formatAmounts="formatAmounts" @close="showImportModal = false" />
@@ -291,6 +319,7 @@ createApp({
             tags: [],
             accountId: initialState.accountId,
             selectedTagId: initialState.selectedTagId,
+            searchQuery: initialState.searchQuery,
             displayType: initialState.displayType,
             displayTypeOptions: DISPLAY_TYPE_OPTIONS,
             dateFrom: initialState.dateFrom,
@@ -312,9 +341,12 @@ createApp({
     },
     computed: {
         balanceLabel() {
-            return this.selectedTagId === '' ? 'Balance' : 'Visible Total'
+            return this.selectedTagId === '' && !this.hasActiveSearch ? 'Balance' : 'Visible Total'
         },
         label() {
+            if (this.hasActivePeriodOverride) {
+                return 'All time'
+            }
             if ((this.displayType === 'All' || this.displayType === 'Interval') && (this.dateFrom === '' || this.dateTo === '')) {
                 return this.displayType === 'All' ? 'All time' : 'Choose a range'
             }
@@ -325,8 +357,37 @@ createApp({
         matchingEntryCount() {
             return this.filteredTransactions.length + this.filteredTransfers.length
         },
+        hasVisibleHeads() {
+            return this.transactionHeads.some(head => Array.isArray(head.transactions) && head.transactions.length > 0)
+        },
+        resultsRenderKey() {
+            return [
+                this.accountId,
+                this.selectedTagId,
+                this.normalizedSearchQuery,
+                this.displayType,
+                this.dateFrom,
+                this.dateTo,
+                this.matchingEntryCount
+            ].join('|')
+        },
+        normalizedSearchQuery() {
+            return this.normalizeSearchQuery(this.searchQuery)
+        },
+        hasActiveSearch() {
+            return this.normalizedSearchQuery !== ''
+        },
+        hasActiveTagFilter() {
+            return this.selectedTagId !== ''
+        },
+        hasActivePeriodOverride() {
+            return this.hasActiveSearch || this.hasActiveTagFilter
+        },
+        hasActiveSummary() {
+            return this.hasActiveSearch || this.selectedTagId !== ''
+        },
         navigationDisabled() {
-            return this.displayType === 'All' || this.displayType === 'Interval'
+            return this.hasActivePeriodOverride || this.displayType === 'All' || this.displayType === 'Interval'
         },
         nextNavigationDisabled() {
             if (this.navigationDisabled) return true
@@ -380,6 +441,10 @@ createApp({
             this.generateFilteredTransfersAndTransactions()
             this.syncFiltersToUrl()
         },
+        searchQuery() {
+            this.generateFilteredTransfersAndTransactions()
+            this.syncFiltersToUrl()
+        },
         displayType() {
             const nextDateRange = this.displayType === 'Interval' || this.displayType === 'Choose Date'
                 ? { dateFrom: this.dateFrom, dateTo: this.dateTo }
@@ -414,7 +479,7 @@ createApp({
         async fetchTags() {
             const response = await fetch('/tags')
             this.tags = await response.json()
-            if (this.selectedTagId !== '' && this.selectedTagId !== 'tagged' && !this.tags.some(tag => String(tag.id) === this.selectedTagId)) {
+            if (this.selectedTagId !== '' && this.selectedTagId !== 'tagged' && this.selectedTagId !== 'untagged' && !this.tags.some(tag => String(tag.id) === this.selectedTagId)) {
                 this.selectedTagId = ''
             }
         },
@@ -450,6 +515,9 @@ createApp({
 
             if (this.selectedTagId === '') url.searchParams.delete('tag_id')
             else url.searchParams.set('tag_id', this.selectedTagId)
+
+            if (this.normalizedSearchQuery === '') url.searchParams.delete('search')
+            else url.searchParams.set('search', this.normalizedSearchQuery)
 
             if (this.displayType === DEFAULT_DISPLAY_TYPE) url.searchParams.delete('display_type')
             else url.searchParams.set('display_type', this.displayType)
@@ -487,6 +555,87 @@ createApp({
         toggleTheme() {
             this.theme = this.theme === 'light' ? 'dark' : 'light'
         },
+        normalizeSearchQuery(value) {
+            return `${value ?? ''}`.replace(/\s+/g, ' ').trim()
+        },
+        normalizeAmountSearchValue(value) {
+            const compactValue = `${value ?? ''}`.replace(/[,\s]/g, '')
+            if (compactValue === '') return null
+            if (!/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(compactValue)) return null
+
+            const signlessValue = compactValue.replace(/^[+-]/, '')
+            const normalizedValue = signlessValue.startsWith('.') ? `0${signlessValue}` : signlessValue
+            const [rawIntegerPart, rawFractionalPart = ''] = normalizedValue.split('.')
+            const integerPart = rawIntegerPart.replace(/^0+(?=\d)/, '') || '0'
+            const fractionalPart = rawFractionalPart.replace(/0+$/, '')
+
+            return fractionalPart === '' ? integerPart : `${integerPart}.${fractionalPart}`
+        },
+        normalizeItemAmount(amountCents) {
+            const absoluteAmountCents = Math.abs(Number(amountCents) || 0)
+            const integerPart = Math.floor(absoluteAmountCents / 1000)
+            const fractionalPart = String(absoluteAmountCents % 1000).padStart(3, '0').replace(/0+$/, '')
+
+            return fractionalPart === ''
+                ? `${integerPart}`
+                : `${integerPart}.${fractionalPart}`
+        },
+        itemMatchesSearch(item, normalizedSearchQuery, normalizedAmountQuery) {
+            if (normalizedSearchQuery === '') return true
+
+            const note = `${item.note ?? ''}`.toLowerCase()
+            if (note.includes(normalizedSearchQuery.toLowerCase())) {
+                return true
+            }
+
+            if (normalizedAmountQuery === null) {
+                return false
+            }
+
+            return this.normalizeItemAmount(item.amountCents) === normalizedAmountQuery
+        },
+        getHighlightedTextParts(text, query) {
+            const sourceText = `${text ?? ''}`
+            const normalizedQuery = this.normalizeSearchQuery(query)
+
+            if (sourceText === '' || normalizedQuery === '') {
+                return [{ text: sourceText, isMatch: false }]
+            }
+
+            const lowerText = sourceText.toLowerCase()
+            const lowerQuery = normalizedQuery.toLowerCase()
+            const parts = []
+            let startIndex = 0
+
+            while (startIndex < sourceText.length) {
+                const matchIndex = lowerText.indexOf(lowerQuery, startIndex)
+                if (matchIndex === -1) {
+                    parts.push({ text: sourceText.slice(startIndex), isMatch: false })
+                    break
+                }
+
+                if (matchIndex > startIndex) {
+                    parts.push({ text: sourceText.slice(startIndex, matchIndex), isMatch: false })
+                }
+
+                parts.push({
+                    text: sourceText.slice(matchIndex, matchIndex + normalizedQuery.length),
+                    isMatch: true
+                })
+                startIndex = matchIndex + normalizedQuery.length
+            }
+
+            return parts.length > 0 ? parts : [{ text: sourceText, isMatch: false }]
+        },
+        getHighlightedNoteParts(displayText, noteText) {
+            const note = `${noteText ?? ''}`
+
+            if (!this.hasActiveSearch || note === '' || !note.toLowerCase().includes(this.normalizedSearchQuery.toLowerCase())) {
+                return [{ text: `${displayText ?? ''}`, isMatch: false }]
+            }
+
+            return this.getHighlightedTextParts(note, this.normalizedSearchQuery)
+        },
         headTone(head) {
             if (head.type === 'carryOver') return 'carryover'
             if (head.type === 'transfer') return 'transfer'
@@ -513,7 +662,10 @@ createApp({
             return ''
         },
         formatRowDate(date) {
-            return dayjs(date).format('MMM DD')
+            const rowDate = dayjs(date)
+            return rowDate.year() === dayjs().year()
+                ? rowDate.format('MMM DD')
+                : rowDate.format('MMM DD YY')
         },
         getHeadTotal(head) {
             return head.transactions.reduce((total, item) => total + item.amountCents, 0)
@@ -688,8 +840,12 @@ createApp({
             return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
         },
         generateFilteredTransfersAndTransactions() {
+            const normalizedSearchQuery = this.normalizedSearchQuery
+            const normalizedAmountQuery = this.normalizeAmountSearchValue(normalizedSearchQuery)
+            const isSearchActive = normalizedSearchQuery !== ''
             const isTagFiltered = this.selectedTagId !== ''
             const isTaggedOnlyFilter = this.selectedTagId === 'tagged'
+            const isUntaggedOnlyFilter = this.selectedTagId === 'untagged'
             this.carryOver = []
             this.filteredTransfers = []
             this.filteredTransactions = []
@@ -701,7 +857,7 @@ createApp({
                 ? this.transfers
                 : this.transfers.filter(transfer => transfer.accountFromId === this.accountId || transfer.accountToId === this.accountId)
 
-            if (!isTagFiltered && this.displayType !== 'All') {
+            if (!isSearchActive && !isTagFiltered && this.displayType !== 'All') {
                 accountTransfers
                     .filter(transfer => transfer.createdOn < this.dateFrom)
                     .forEach(transfer => {
@@ -729,14 +885,20 @@ createApp({
                     })
             }
 
-            let transfers = this.displayType !== 'All'
+            let transfers = !isSearchActive && !isTagFiltered && this.displayType !== 'All'
                 ? accountTransfers.filter(transfer => transfer.createdOn >= this.dateFrom && transfer.createdOn <= this.dateTo)
                 : accountTransfers
 
             if (isTagFiltered) {
-                transfers = transfers.filter(transfer => isTaggedOnlyFilter
-                    ? transfer.tags.length > 0
-                    : transfer.tags.some(tag => String(tag.id) === this.selectedTagId))
+                transfers = transfers.filter(transfer => {
+                    if (isTaggedOnlyFilter) return transfer.tags.length > 0
+                    if (isUntaggedOnlyFilter) return transfer.tags.length === 0
+                    return transfer.tags.some(tag => String(tag.id) === this.selectedTagId)
+                })
+            }
+
+            if (isSearchActive) {
+                transfers = transfers.filter(transfer => this.itemMatchesSearch(transfer, normalizedSearchQuery, normalizedAmountQuery))
             }
 
             this.filteredTransfers = transfers
@@ -745,27 +907,31 @@ createApp({
                 ? this.transactions.filter(transaction => transaction.isIncludedInTotalBalance === 1)
                 : this.transactions.filter(transaction => transaction.accountId === this.accountId)
 
-            if (this.displayType !== 'All') {
-                if (!isTagFiltered) {
-                    transactions
-                        .filter(transaction => transaction.createdOn < this.dateFrom)
-                        .forEach(transaction => {
-                            if (carryOver[transaction.accountId] === undefined) {
-                                carryOver[transaction.accountId] = 0
-                            }
-                            if (transaction.categoryType === 'Income') carryOver[transaction.accountId] += transaction.amountCents
-                            if (transaction.categoryType === 'Expense') carryOver[transaction.accountId] -= transaction.amountCents
-                        })
-                }
+            if (!isSearchActive && !isTagFiltered && this.displayType !== 'All') {
+                transactions
+                    .filter(transaction => transaction.createdOn < this.dateFrom)
+                    .forEach(transaction => {
+                        if (carryOver[transaction.accountId] === undefined) {
+                            carryOver[transaction.accountId] = 0
+                        }
+                        if (transaction.categoryType === 'Income') carryOver[transaction.accountId] += transaction.amountCents
+                        if (transaction.categoryType === 'Expense') carryOver[transaction.accountId] -= transaction.amountCents
+                    })
 
                 transactions = transactions.filter(transaction => transaction.createdOn >= this.dateFrom && transaction.createdOn <= this.dateTo)
             }
 
             if (isTagFiltered) {
-                transactions = transactions.filter(transaction => isTaggedOnlyFilter
-                    ? transaction.tags.length > 0
-                    : transaction.tags.some(tag => String(tag.id) === this.selectedTagId))
-            } else {
+                transactions = transactions.filter(transaction => {
+                    if (isTaggedOnlyFilter) return transaction.tags.length > 0
+                    if (isUntaggedOnlyFilter) return transaction.tags.length === 0
+                    return transaction.tags.some(tag => String(tag.id) === this.selectedTagId)
+                })
+            }
+
+            if (isSearchActive) {
+                transactions = transactions.filter(transaction => this.itemMatchesSearch(transaction, normalizedSearchQuery, normalizedAmountQuery))
+            } else if (!isTagFiltered) {
                 this.carryOver = Object.keys(carryOver)
                     .map(accountId => {
                         const account = this.accounts.find(item => item._id === accountId)
@@ -840,7 +1006,7 @@ createApp({
             this.transactionHeads = transactionHeads
             this.accountBalance = accountBalance
 
-            if (this.displayType === 'All') {
+            if (!isSearchActive && !isTagFiltered && this.displayType === 'All') {
                 const allDates = [...accountTransfers.map(transfer => transfer.createdOn), ...transactions.map(transaction => transaction.createdOn)]
                 if (allDates.length > 0) {
                     this.dateFrom = Math.min(...allDates)
